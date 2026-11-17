@@ -8,8 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@4.5.0/dist/pmtiles.js"></script>
 <style>
   @font-face{font-family:'Patria';font-weight:400;font-style:normal;font-display:swap;src:url('https://framework-gb.cdn.gob.mx/applications/cms/fonts/Patria_Regular.otf') format('opentype')}
   @font-face{font-family:'Patria';font-weight:700;font-style:normal;font-display:swap;src:url('https://framework-gb.cdn.gob.mx/applications/cms/fonts/Patria_Bold.otf') format('opentype')}
@@ -43,9 +44,8 @@
 
   .lienzo{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
   .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-  #mapa{height:calc(100vh - 150px);min-height:480px;background:#DCE6EA;z-index:0}
-  .edo-nombre{font-family:'Noto Sans',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-    color:#9A8A72;text-align:center;white-space:nowrap;pointer-events:none}
+  .mapa-wrap{position:relative}
+  #mapa{height:calc(100vh - 150px);min-height:480px;background:#1d2b33;z-index:0}
   .lado{display:flex;flex-direction:column;gap:16px}
   .lado .panel{padding:16px 18px}
   h2{font-family:'Patria','Noto Sans',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-strong);margin-bottom:12px}
@@ -71,11 +71,13 @@
   .vacio{color:var(--muted);font-size:.78rem;padding:8px 0}
 
   /* Leyenda y globo del mapa */
-  .leyenda{background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2}
+  .leyenda{position:absolute;left:10px;bottom:28px;z-index:2;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2}
   .leyenda b{display:block;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-strong);margin-bottom:6px}
   .leyenda div{display:flex;align-items:center;gap:7px;margin-top:3px;font-variant-numeric:tabular-nums}
   .leyenda i{width:16px;height:11px;border-radius:2px;border:1px solid rgba(110,21,46,.35);flex:0 0 auto}
-  .leaflet-popup-content{font-family:'Noto Sans',sans-serif;font-size:.76rem;color:var(--text);margin:12px 14px;min-width:210px}
+  .maplibregl-popup-content{font-family:'Noto Sans',sans-serif;font-size:.76rem;color:var(--text);padding:12px 14px;min-width:210px;border-radius:9px}
+  .tip .maplibregl-popup-content{min-width:0;padding:4px 8px;font-size:.72rem}
+  .tip .maplibregl-popup-tip{display:none}
   .glb h3{font-family:'Patria','Noto Sans',sans-serif;font-size:1rem;color:var(--text-strong);line-height:1.15}
   .glb .e{font-size:.68rem;color:var(--muted);margin-bottom:7px}
   .glb .t{font-weight:700;margin-bottom:6px}
@@ -112,7 +114,8 @@
   <div class="banner" id="banner"></div>
 
   <div class="lienzo">
-    <div class="panel"><div id="mapa" role="application" aria-label="Mapa de actividades por municipio"></div></div>
+    <div class="panel mapa-wrap"><div id="mapa" role="application" aria-label="Mapa de actividades por municipio"></div>
+      <div class="leyenda" id="leyenda"></div></div>
 
     <div class="lado">
       <div class="panel">
@@ -130,7 +133,7 @@
       </div>
       <div class="panel" id="p-sin" style="display:none">
         <h2>Sin ubicar en el mapa</h2>
-        <p class="nota">Actividades cuyo ESTADO o MUNICIPIO en el Sheet está vacío o no coincide con un municipio del INEGI.</p>
+        <p class="nota">Actividades cuyo ESTADO o MUNICIPIO en el Sheet está vacío o no coincide con un municipio de INEGI.</p>
         <div class="chips" id="sin"></div>
       </div>
     </div>
@@ -145,21 +148,50 @@ const PROY={TAP:['AIFA – Pachuca','#8E1B3A'],TMQ:['México – Querétaro','#2
 const RAMPA=['#F3D9DF','#E2A3B2','#CC6A83','#A42145','#6E152E'];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=n=>Number(n||0).toLocaleString('es-MX');
+const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
+const MUN={source:'lim',sourceLayer:'municipios'};
 
-const mapa=L.map('mapa',{zoomSnap:.25,minZoom:4}).setView([23.6,-102.5],5);
-mapa.attributionControl.setPrefix(false).addAttribution('Límites estatales y municipales: INEGI');
-mapa.options.maxZoom=11;
-// Fondo propio: contorno de los estados (no depende de ningún servicio de mapas externo).
-mapa.createPane('fondo').style.zIndex=350;
-fetch('/static/estados_mx.geojson').then(r=>r.json()).then(g=>{
-  L.geoJSON(g,{pane:'fondo',interactive:false,style:{fillColor:'#FBF7EF',fillOpacity:1,color:'#B9A98F',weight:1}}).addTo(mapa);
-  g.features.forEach(f=>L.marker([f.properties.lat,f.properties.lng],{pane:'fondo',interactive:false,keyboard:false,
-    icon:L.divIcon({className:'edo-nombre',html:esc(f.properties.NOM_ENT.replace(/ de (Zaragoza|Ocampo|Ignacio de la Llave)$/,'')),iconSize:[120,14]})}).addTo(mapa));
-}).catch(err=>console.error('No se pudo cargar el fondo de estados',err));
-let capa=null, cortes=[], porId={}, capasPorId={};
-const leyenda=L.control({position:'bottomleft'});
-leyenda.onAdd=()=>{const d=L.DomUtil.create('div','leyenda');d.id='leyenda';return d;};
-leyenda.addTo(mapa);
+// Límites INEGI 2025 a detalle (archivo propio) sobre imagen satelital de Esri.
+const proto=new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles',proto.tile);
+const mapa=new maplibregl.Map({
+  container:'mapa',
+  bounds:[[-117.5,14.4],[-86.6,32.8]],
+  minZoom:3,maxZoom:17,
+  attributionControl:{compact:true},
+  style:{version:8,
+    sources:{
+      sat:{type:'raster',tiles:[ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,
+        attribution:'Imagen: Esri, Maxar, Earthstar Geographics'},
+      ref:{type:'raster',tiles:[ESRI+'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19},
+      lim:{type:'vector',url:'pmtiles://'+location.origin+'/static/mx_limites.pmtiles',promoteId:{municipios:'CVEGEO'},
+        attribution:'Límites: INEGI, Marco Geoestadístico 2025'}
+    },
+    layers:[
+      {id:'sat',type:'raster',source:'sat'},
+      {id:'mun-fill',type:'fill',source:'lim','source-layer':'municipios',
+        paint:{'fill-color':['coalesce',['feature-state','c'],'#000000'],
+               'fill-opacity':['case',['to-boolean',['feature-state','c']],.62,0]}},
+      {id:'mun-linea',type:'line',source:'lim','source-layer':'municipios',minzoom:6,
+        paint:{'line-color':'#FFFFFF','line-opacity':.35,'line-width':['interpolate',['linear'],['zoom'],6,.3,12,1.2]}},
+      {id:'mun-activo',type:'line',source:'lim','source-layer':'municipios',
+        paint:{'line-color':'#FFFFFF','line-width':1.1,'line-opacity':['case',['to-boolean',['feature-state','c']],.9,0]}},
+      {id:'edo-linea',type:'line',source:'lim','source-layer':'estados',
+        paint:{'line-color':'#F2D27A','line-width':['interpolate',['linear'],['zoom'],4,1,10,2.6]}},
+      {id:'mun-hover',type:'line',source:'lim','source-layer':'municipios',filter:['==',['get','CVEGEO'],''],
+        paint:{'line-color':'#FFE36E','line-width':3}},
+      {id:'ref',type:'raster',source:'ref'}
+    ]}
+});
+mapa.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-left');
+mapa.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
+// Listo cuando el estilo ya tiene la fuente de límites (no espera al satélite).
+const listo=new Promise(r=>{
+  const ok=()=>{if(!mapa.getSource('lim'))return false;r();return true;};
+  if(!ok())mapa.on('styledata',function f(){if(ok())mapa.off('styledata',f);});
+});
+
+let cortes=[], porId={};
 
 // Límites de clase (hasta 5) repartidos sobre los valores que sí existen.
 function calcularCortes(valores){
@@ -183,24 +215,41 @@ function globo(m){
     (rec?'<ul>'+rec+'</ul>':'')+'</div>';
 }
 
-function pintar(j){
-  porId={};capasPorId={};
-  j.municipios.forEach(m=>porId[m.id]=m);
-  cortes=calcularCortes(j.municipios.map(m=>m.n));
+// Globo al dar clic y etiqueta al pasar el mouse (solo municipios con actividades).
+const tip=new maplibregl.Popup({closeButton:false,closeOnClick:false,className:'tip',offset:14});
+const pop=new maplibregl.Popup({maxWidth:'300px',offset:6});
+let hoverId=null;
+function salir(){hoverId=null;mapa.setFilter('mun-hover',['==',['get','CVEGEO'],'']);mapa.getCanvas().style.cursor='';tip.remove();}
+mapa.on('mousemove','mun-fill',e=>{
+  const m=porId[e.features[0].properties.CVEGEO];
+  if(!m){if(hoverId!==null)salir();return;}
+  if(hoverId!==m.cvegeo){hoverId=m.cvegeo;mapa.setFilter('mun-hover',['==',['get','CVEGEO'],hoverId]);}
+  mapa.getCanvas().style.cursor='pointer';
+  tip.setLngLat(e.lngLat).setHTML(esc(m.municipio)+': <b>'+num(m.n)+'</b>').addTo(mapa);
+});
+mapa.on('mouseleave','mun-fill',salir);
+mapa.on('click','mun-fill',e=>{
+  const m=porId[e.features[0].properties.CVEGEO];
+  if(m){tip.remove();pop.setLngLat(e.lngLat).setHTML(globo(m)).addTo(mapa);}
+});
 
-  if(capa)mapa.removeLayer(capa);
-  capa=L.geoJSON(j.geo,{
-    style:f=>({fillColor:color(f.properties.n),fillOpacity:.85,color:'#6E152E',weight:.8}),
-    onEachFeature:(f,l)=>{
-      const m=porId[f.properties.id];
-      capasPorId[f.properties.id]=l;
-      l.bindPopup(()=>globo(m),{maxWidth:300});
-      l.bindTooltip(m.municipio+': '+num(m.n),{sticky:true});
-      l.on('mouseover',()=>l.setStyle({weight:2.2}));
-      l.on('mouseout',()=>l.setStyle({weight:.8}));
-    }
-  }).addTo(mapa);
-  if(j.geo.features.length)mapa.fitBounds(capa.getBounds(),{padding:[24,24],maxZoom:9});
+// Colorea los municipios con actividades y encuadra el mapa.
+async function pintarMapa(j){
+  await listo;
+  pop.remove();salir();
+  mapa.removeFeatureState(MUN);
+  j.municipios.forEach(m=>mapa.setFeatureState({...MUN,id:m.cvegeo},{c:color(m.n)}));
+  if(j.municipios.length){
+    const b=j.municipios.reduce((a,m)=>[Math.min(a[0],m.bbox[0]),Math.min(a[1],m.bbox[1]),Math.max(a[2],m.bbox[2]),Math.max(a[3],m.bbox[3])],[180,90,-180,-90]);
+    mapa.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:40,maxZoom:10,duration:600});
+  }
+}
+
+function pintar(j){
+  porId={};
+  j.municipios.forEach(m=>porId[m.cvegeo]=m);
+  cortes=calcularCortes(j.municipios.map(m=>m.n));
+  pintarMapa(j);
 
   const v=j.ventana;
   $('periodo').textContent='Del '+v.desde_txt+' al '+v.hasta_txt+(j.proyecto?' · '+j.proyecto:'');
@@ -224,7 +273,10 @@ function pintar(j){
     const b=document.createElement('button');
     b.className='item';b.type='button';
     b.innerHTML='<span class="r">'+String(i+1).padStart(2,'0')+'</span><span class="m">'+esc(m.municipio)+'<span>'+esc(m.estado)+'</span></span><span class="v">'+num(m.n)+'</span>';
-    b.addEventListener('click',()=>{const l=capasPorId[m.id];if(!l)return;mapa.fitBounds(l.getBounds(),{maxZoom:9,padding:[40,40]});l.openPopup();});
+    b.addEventListener('click',()=>{
+      mapa.fitBounds([[m.bbox[0],m.bbox[1]],[m.bbox[2],m.bbox[3]]],{maxZoom:12,padding:40});
+      tip.remove();pop.setLngLat(m.punto).setHTML(globo(m)).addTo(mapa);
+    });
     lista.appendChild(b);
   });
 

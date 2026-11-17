@@ -11,7 +11,6 @@ import re
 from collections import Counter, defaultdict
 
 from flask import jsonify, render_template, request
-from shapely.geometry import mapping
 
 from reporte import _fecha, _hora, _rango, _fecha_larga
 
@@ -19,7 +18,6 @@ N = None            # módulo principal (app.py)
 _IDX_EM = None      # (estado, municipio) normalizados -> índice en la capa INEGI
 _IDX_M = None       # municipio normalizado -> [índices] (para cuando falta el estado)
 _POR_EDO = None     # estado normalizado -> [(municipio normalizado, índice)]
-_GEO_CACHE = {}     # índice -> geometría simplificada lista para el navegador
 
 ALIAS_EDO = {
     "coahuila": "coahuila de zaragoza", "coah": "coahuila de zaragoza",
@@ -32,6 +30,10 @@ ALIAS_EDO = {
     "jal": "jalisco", "hgo": "hidalgo", "tamps": "tamaulipas", "sin": "sinaloa",
 }
 
+# Nombres de ciudad que mandan en lugar del municipio INEGI.
+ALIAS_MUN = {
+    "santiago de queretaro": "queretaro",
+}
 
 # Texto comparable: sin acentos, puntos ni mayúsculas.
 def _norm(s):
@@ -57,6 +59,7 @@ def _indices():
 def _buscar(estado, nombre):
     em, m, por_edo = _indices()
     nombre = re.sub(r"^(municipios? de|mpio de|mpio)\s+", "", _norm(nombre))
+    nombre = ALIAS_MUN.get(nombre, nombre)
     if not nombre:
         return None
     if estado:
@@ -90,21 +93,6 @@ def ubicar(estado, municipio):
             hallados.append(i)
     return hallados
 
-
-def _redondear(coords):
-    if isinstance(coords[0], (int, float)):
-        return [round(coords[0], 4), round(coords[1], 4)]
-    return [_redondear(c) for c in coords]
-
-
-# Geometría simplificada del municipio (se calcula una vez y se reutiliza).
-def _geometria(i):
-    if i not in _GEO_CACHE:
-        g = mapping(N.MUN_GEOMS[i].simplify(0.004, preserve_topology=True))
-        _GEO_CACHE[i] = {"type": g["type"], "coordinates": _redondear(g["coordinates"])}
-    return _GEO_CACHE[i]
-
-
 # Lee el Sheet y arma el mapa para el rango (y proyecto) pedidos.
 def datos(desde, hasta, proyecto=""):
     inv = {v: k for k, v in N.mapa_proyectos.items()}
@@ -134,18 +122,18 @@ def datos(desde, hasta, proyecto=""):
             m["proy"][clave] += 1
             m["acts"].append((d, _hora(f), clave, (f.get("TIPO DE SOLICITUD") or "").strip()))
 
-    municipios, features = [], []
+    municipios = []
     for i, m in sorted(por_mun.items(), key=lambda kv: -kv[1]["n"]):
-        p = N.MUN_PROPS[i]
+        p, g = N.MUN_PROPS[i], N.MUN_GEOMS[i]
         recientes = sorted(m["acts"], key=lambda a: (a[0], a[1]), reverse=True)[:5]
+        punto = g.representative_point()
         municipios.append({
-            "id": i, "municipio": p["NOM_MUN"], "estado": p["NOM_ENT"], "n": m["n"],
+            "id": i, "cvegeo": p["CVEGEO"], "municipio": p["NOM_MUN"], "estado": p["NOM_ENT"], "n": m["n"],
+            "bbox": [round(v, 5) for v in g.bounds], "punto": [round(punto.x, 5), round(punto.y, 5)],
             "proyectos": dict(m["proy"].most_common()),
             "recientes": [{"fecha": a[0].strftime("%d/%m/%Y"), "hora": a[1], "proyecto": a[2],
                            "actividad": a[3]} for a in recientes],
         })
-        features.append({"type": "Feature", "properties": {"id": i, "n": m["n"]},
-                         "geometry": _geometria(i)})
 
     return {
         "ventana": {"desde": desde.strftime("%d/%m/%Y"), "hasta": hasta.strftime("%d/%m/%Y"),
@@ -158,7 +146,6 @@ def datos(desde, hasta, proyecto=""):
         "no_ubicados": [{"nombre": k, "n": v} for k, v in no_ubicados.most_common(12)],
         "proyectos": [{"clave": k, "n": v} for k, v in por_proy.most_common()],
         "municipios": municipios,
-        "geo": {"type": "FeatureCollection", "features": features},
     }
 
 
