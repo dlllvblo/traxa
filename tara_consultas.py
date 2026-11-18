@@ -525,8 +525,7 @@ def redactar(q, acts):
             dia = a["fecha"]
             lineas.append(f"\n— {_fmt(dia)} —")
         lugar = _titulo(a["municipio"]) or _titulo(a["estado"])
-        actividad = a["actividad"] if len(a["actividad"]) <= 90 else a["actividad"][:87] + "…"
-        lineas.append(f"• {a['hora'] or '--:--'} [{a['proyecto']}] " + (f"{lugar} · " if lugar else "") + actividad)
+        lineas.append(f"• {a['hora'] or '--:--'} [{a['proyecto']}] " + (f"{lugar} · " if lugar else "") + a["actividad"])
     if len(acts) > MAX_LISTA:
         lineas.append(f"\n… y {len(acts) - MAX_LISTA} más. Acota con un proyecto o un periodo más corto.")
     return "\n".join(lineas)
@@ -590,8 +589,8 @@ def responder(texto, hoy=None, chat_id=None, natural=False):
         _ULTIMA[chat_id] = (time.time(), q)
     acts = filtrar(q, filas)
     base = redactar(q, acts)
-    if q["intencion"] == "resumen":
-        return base          # el resumen ya viene estructurado; Haiku no lo reescribe
+    if q["intencion"] in ("resumen", "listar"):
+        return base          # resumen y lista van completos y estructurados; Haiku no los reescribe
     return (natural and _natural(t, _datos(q, acts, base), hist)) or base
 
 
@@ -714,8 +713,29 @@ def atender(chat_id, texto):
         respuesta = "❌ No pude consultar el Sheet en este momento. Intenta de nuevo en un minuto."
     _recordar(chat_id, "Usuario", texto)
     _recordar(chat_id, "Tara", respuesta)
-    N.telegram_enviar(chat_id, respuesta)
+    for parte in _partir(respuesta):
+        N.telegram_enviar(chat_id, parte)
     return True
+
+
+# Telegram no acepta mensajes de más de 4096 caracteres: se parten por renglón.
+def _partir(texto, limite=4000):
+    partes, actual = [], ""
+    for linea in texto.split("\n"):
+        while len(linea) > limite:                      # renglón larguísimo: se corta a la fuerza
+            if actual:
+                partes.append(actual)
+                actual = ""
+            partes.append(linea[:limite])
+            linea = linea[limite:]
+        if actual and len(actual) + 1 + len(linea) > limite:
+            partes.append(actual)
+            actual = linea
+        else:
+            actual = f"{actual}\n{linea}" if actual else linea
+    if actual:
+        partes.append(actual)
+    return partes
 
 
 # Conecta Tara a la app principal y agrega la ruta del resumen diario.
