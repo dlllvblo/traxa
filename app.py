@@ -2,7 +2,9 @@ from flask import Flask, request, jsonify, render_template, render_template_stri
 import hmac
 import time
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+MX = timezone(timedelta(hours=-6))   # hora del centro de México (el servidor corre en UTC)
 import gspread
 from google.oauth2.service_account import Credentials
 import os
@@ -823,7 +825,7 @@ def procesar_agenda(texto):
             mes_texto = m.group(2).lower()
             if mes_texto in meses:
                 dia = m.group(1).zfill(2)
-                anio = m.group(3) if m.group(3) else str(datetime.now().year)
+                anio = m.group(3) if m.group(3) else str(datetime.now(MX).year)
                 fecha = f"{dia}/{meses[mes_texto]}/{anio}"
                 fecha_dt = datetime.strptime(fecha, "%d/%m/%Y")
                 fecha_solicitud = (fecha_dt - timedelta(days=1)).strftime("%d/%m/%Y")
@@ -1799,7 +1801,7 @@ def api_agenda():
 
         # Ventana de 5 días desde la fecha MÁS RECIENTE del Sheet
         # Fechas a más de 7 días en el futuro se toman como error de captura y no anclan la ventana.
-        limite = datetime.now().date() + timedelta(days=7)
+        limite = datetime.now(MX).date() + timedelta(days=7)
         fechas_validas = [d for d in (fecha_dt(f.get("FECHA Y HORA", "")) for f in filas) if d and d <= limite]
         if fechas_validas:
             fecha_tope = max(fechas_validas)
@@ -1890,7 +1892,7 @@ def api_conteo():
                             "sin_clasificar": [], "total": 0})
 
         PISO = datetime(2026, 1, 1).date()
-        HOY = datetime.now().date()
+        HOY = datetime.now(MX).date()
         # Filtro opcional de conteo
         try:
             if request.args.get("desde"):

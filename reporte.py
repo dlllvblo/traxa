@@ -7,7 +7,9 @@ Se conecta desde app.py con dos líneas:
 import io
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+MX = timezone(timedelta(hours=-6))   # hora del centro de México (el servidor corre en UTC)
 
 from flask import jsonify, render_template, request, send_file
 
@@ -70,7 +72,7 @@ def _fecha_larga(d):
 # Rango pedido en la URL (?desde=AAAA-MM-DD&hasta=AAAA-MM-DD).
 # Sin fechas: del 1 de enero del año en curso a hoy.
 def _rango():
-    hoy = datetime.now().date()
+    hoy = datetime.now(MX).date()
     d, h = request.args.get("desde"), request.args.get("hasta")
     desde = datetime.strptime(d, "%Y-%m-%d").date() if d else hoy.replace(month=1, day=1)
     hasta = datetime.strptime(h, "%Y-%m-%d").date() if h else hoy
@@ -160,7 +162,7 @@ def datos(desde, hasta):
             "desde_iso": desde.isoformat(), "hasta_iso": hasta.isoformat(),
             "desde_txt": _fecha_larga(desde), "hasta_txt": _fecha_larga(hasta),
         },
-        "generado": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "generado": datetime.now(MX).strftime("%d/%m/%Y %H:%M"),
         "total": total,
         "dias_con_actividad": len(por_dia),
         "proyectos": proyectos,
