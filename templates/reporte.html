@@ -89,6 +89,14 @@
     body{padding:8px}.cabeza,.cuerpo{padding-left:16px;padding-right:16px}
     .kpis{grid-template-columns:repeat(2,1fr)}.dos{grid-template-columns:1fr}
   }
+  /* Teléfono: el nombre arriba y la barra abajo, para que no se encimen */
+  @media (max-width:640px){
+    .barra .btn{flex:1 1 auto;text-align:center}
+    .cabeza .marca{font-size:26px}.cabeza .periodo{font-size:15px}
+    .fila,.dos .fila{grid-template-columns:1fr auto;grid-template-areas:"nom num" "pista pista";row-gap:4px;padding:6px 0}
+    .fila .nom{grid-area:nom}.fila .pista{grid-area:pista}.fila .num{grid-area:num}
+    .serie-eje span{white-space:normal;line-height:1.1;font-size:8px}
+  }
   @page{size:letter;margin:12mm}
   @media print{
     body{background:#fff;padding:0;font-size:11.5px}

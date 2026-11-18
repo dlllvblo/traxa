@@ -138,6 +138,21 @@
     .board-head,.board-row{grid-template-columns:46px 50px 1fr;}
     .board-row .st{display:none}.board-head span:last-child{display:none}
   }
+  /* Teléfono: encabezado ordenado y tarjetas de 2 en 2 */
+  @media (max-width:560px){
+    .topbar{padding:14px;gap:12px}.topbar .spacer{display:none}
+    .filtro{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+    .filtro label{display:flex;flex-direction:column;gap:4px}
+    .filtro input{width:100%;min-width:0;font-size:.8rem;padding:8px}
+    .filtro .refresh{justify-content:center;width:100%}
+    .ventana{text-align:left;flex:1 1 100%}
+    .grid{gap:12px}
+    .kpi{grid-column:span 6;padding:14px}
+    .kpi .top{margin-bottom:8px}.kpi .icon{width:28px;height:28px}.kpi .icon svg{width:15px;height:15px}
+    .kpi .value{font-size:1.9rem}.kpi .label{font-size:.66rem;margin-top:5px}
+    .panel{padding:16px 14px}
+    .panel-head h2{font-size:.72rem;letter-spacing:.12em}
+  }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>

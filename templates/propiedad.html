@@ -102,6 +102,14 @@
 
   @media (max-width:1040px){.span7,.span5{grid-column:span 12}}
   @media (max-width:640px){body{padding:12px}.load-row{grid-template-columns:20px 1fr 70px;gap:10px}}
+  /* Teléfono: totales en una fila */
+  @media (max-width:560px){
+    .topbar{padding:14px;gap:12px}.topbar .spacer{display:none}
+    .ventana{text-align:left;flex:1 1 100%}
+    .totalbar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .totalbar .sep{display:none}
+    .totalbar .item .t{font-size:.5rem;letter-spacing:.1em}.totalbar .item .n{font-size:1.4rem}
+  }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
