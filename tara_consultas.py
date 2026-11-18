@@ -361,6 +361,8 @@ def interpretar(texto, filas, hoy):
     categorias = sorted({re.sub(r"^\d+\.\s*", "", c) for c, _ in N.clasificar_actividad(texto)})
     celda = N._sin_acentos(texto.upper())
     deps = [canon for canon, pats in N._DEP_PATRONES.items() if any(p.search(celda) for p in pats)]
+    if "GOB. MUNICIPAL" in deps and not re.search(r"AYUNTAMIENTO|GOBIERNO|PRESIDENCIA MUNICIPAL", celda):
+        deps.remove("GOB. MUNICIPAL")     # «municipio de X» es un lugar, no la dependencia
 
     if _palabra("resumen", n):
         intencion = "resumen"

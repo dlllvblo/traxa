@@ -86,7 +86,7 @@ def _lista(contador, tope=None):
 # Lee el Sheet y arma todos los números del reporte para el rango dado.
 def datos(desde, hasta):
     inv = {v: k for k, v in N.mapa_proyectos.items()}
-    proy, edo, dep, cat, prop, mun, por_dia = (Counter() for _ in range(7))
+    proy, edo, dep, cat, prop, mun, por_dia, emp = (Counter() for _ in range(8))
     actividades, sin_fecha, sin_categoria = [], 0, 0
 
     for f in N._filas_hoja_principal():
@@ -113,6 +113,9 @@ def datos(desde, hasta):
         for canon, patrones in N._DEP_PATRONES.items():
             if any(p.search(celda) for p in patrones):
                 dep[canon] += 1
+        for canon, patrones in N._EMP_PATRONES.items():
+            if any(p.search(celda) for p in patrones):
+                emp[canon] += 1
 
         # Mismo criterio que la pantalla de Conteo, para que los números coincidan.
         hits = N.clasificar_actividad(f.get("TIPO DE SOLICITUD", ""),
@@ -168,6 +171,7 @@ def datos(desde, hasta):
         "proyectos": proyectos,
         "estados": _lista(edo),
         "dependencias": _lista(dep),
+        "empresas": _lista(emp),
         "categorias": _lista(cat),
         "sin_categoria": sin_categoria,
         "propiedad": _lista(prop),
@@ -325,6 +329,9 @@ def _word(d):
           [(x["nombre"], x["n"], pct(x["n"])) for x in d["estados"]], [11.5, 3, 2])
     tabla("Dependencias participantes", ["Dependencia", "Actividades"],
           [(x["nombre"], x["n"]) for x in d["dependencias"]], [13.5, 3])
+    if d["empresas"]:
+        tabla("Empresas y supervisión de obra", ["Participante", "Actividades"],
+              [(x["nombre"], x["n"]) for x in d["empresas"]], [13.5, 3])
     tabla("Tipo de propiedad", ["Tipo", "Actividades", "%"],
           [(x["nombre"], x["n"], pct(x["n"])) for x in d["propiedad"]], [11.5, 3, 2])
     tabla("Municipios con más actividades", ["Municipio", "Actividades"],

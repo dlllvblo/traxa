@@ -140,6 +140,7 @@
       <div class="dos">
         <section><h2>Distribución por estado</h2><div id="s-edo"></div></section>
         <section><h2>Dependencias participantes</h2><div id="s-dep"></div></section>
+        <section id="sec-emp"><h2>Empresas y supervisión de obra</h2><div id="s-emp"></div></section>
         <section><h2>Tipo de propiedad</h2><div id="s-prop"></div></section>
         <section><h2>Municipios con más actividades</h2><div id="s-mun"></div></section>
       </div>
@@ -199,6 +200,8 @@ function pintar(){
   barras('s-cat',cats,{color:x=>x.nombre==='Sin categoría asignada'?'#A8957F':'#245C4F'});
   barras('s-edo',d.estados,{total:d.total,color:()=>'#245C4F'});
   barras('s-dep',d.dependencias,{color:()=>'#A8803F'});
+  $('sec-emp').style.display=(d.empresas||[]).length?'':'none';
+  barras('s-emp',d.empresas||[],{color:()=>'#6E7C58'});
   barras('s-prop',d.propiedad,{total:d.total,color:x=>x.nombre==='Sin dato'?'#A8957F':'#6E152E'});
   barras('s-mun',d.municipios,{color:()=>'#4F6D8A'});
 

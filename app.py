@@ -123,7 +123,7 @@ def _sin_acentos(s):
                    if unicodedata.category(c) != 'Mn')
 
 DEP_ALIASES = {
-    "SEDATU":   ["SEDATU", "EDATU"],
+    "SEDATU":   ["SEDATU", "EDATU", "DGCAM"],      # DGCAM es de SEDATU
     "RAN":      ["RAN", "REGISTRO AGRARIO NACIONAL"],
     "SEDENA":   ["SEDENA", "DEFENSA", "SDN"],   # DEFENSA == SEDENA
     "SICT":     ["SICT", "VINCULACION"],        # Vinculación es unidad de SICT
@@ -131,6 +131,9 @@ DEP_ALIASES = {
     "PA":       ["PA", "P.A.", "PROCURADURIA AGRARIA"],
     "FIFONAFE": ["FIFONAFE"],
     "INDAABIN": ["INDAABIN", "INDABIN"],
+    "GOB. ESTATAL":   ["GOBIERNO DEL ESTADO", "GOBIERNO ESTATAL", "GOB. ESTATAL", "DESARROLLO URBANO ESTATAL"],
+    "GOB. MUNICIPAL": ["GOBIERNO MUNICIPAL", "AYUNTAMIENTO", "PRESIDENCIA MUNICIPAL", "MUNICIPAL",
+                       "MUNICIPALES", "MUNICIPIO", "MUNICIPIOS", "CATASTRO"],
     # OTRAS
     "ARTF":     ["ARTF"],
     "SIAL":     ["SIAL"],          
@@ -145,9 +148,18 @@ DEP_ALIASES = {
     "CENAGAS":  ["CENAGAS"],
     "CENAPRED": ["CENAPRED", "CENEPRED"],
     "SALUD":    ["SALUD"],
+    "IMEVIS":   ["IMEVIS"],
 }
 
-DEP_NUCLEO = {"SEDATU","SEDENA","RAN","SICT","ATTRAPI","PA","FIFONAFE","INDAABIN"}
+DEP_NUCLEO = {"SEDATU","SEDENA","RAN","SICT","ATTRAPI","PA","FIFONAFE","INDAABIN","GOB. ESTATAL","GOB. MUNICIPAL"}
+
+# Empresas y supervisión de obra: se cuentan aparte, no son dependencias.
+EMPRESAS_ALIASES = {
+    "Supervisión de obra": ["SUPERVISION DE OBRA", "SUPERVISION EXTERNA", "SUPERVISION", "RESIDENCIA DE OBRA"],
+    "Mota-Engil":          ["MOTA-ENGIL", "MOTA - ENGIL", "MOTA ENGIL", "ME-M"],
+    "CARSO":               ["CARSO"],
+    "DOZZER":              ["DOZZER", "DOZER"],
+}
 
 # Arma la regex que reconoce una dependencia (sin acentos, puntos opcionales).
 def _dep_pat(alias):
@@ -157,6 +169,12 @@ def _dep_pat(alias):
 
 _DEP_PATRONES = {canon: [re.compile(_dep_pat(al)) for al in als]
                  for canon, als in DEP_ALIASES.items()}
+# «Gobierno de Tizayuca» es municipal; «Gobierno de Hidalgo», estatal.
+_EDOS_GOB = r"HIDALGO|QUERETARO|GUANAJUATO|JALISCO|SAN LUIS POTOSI|COAHUILA|NUEVO LEON|TAMAULIPAS|MEXICO|SINALOA"
+_DEP_PATRONES["GOB. ESTATAL"].append(re.compile(r"(?<![A-Z0-9])GOBIERNO\s+DE\s+(?:" + _EDOS_GOB + r")(?![A-Z0-9])"))
+_DEP_PATRONES["GOB. MUNICIPAL"].append(re.compile(r"(?<![A-Z0-9])GOBIERNO\s+DE\s+(?!(?:" + _EDOS_GOB + r")(?![A-Z0-9]))[A-Z]"))
+_EMP_PATRONES = {canon: [re.compile(_dep_pat(al)) for al in als]
+                 for canon, als in EMPRESAS_ALIASES.items()}
 
 _PROY_POR_CLAVE  = {_norm(k): v for k, v in mapa_proyectos.items()}
 _PROY_POR_NOMBRE = {frozenset(_norm(v).split()): v for v in mapa_proyectos.values()}
@@ -1783,6 +1801,7 @@ def api_agenda():
 
         inv = {v: k for k, v in mapa_proyectos.items()}
         carga, edo, dep, serie = Counter(), Counter(), Counter(), defaultdict(int)
+        emp = Counter()
 
         
 
@@ -1846,6 +1865,9 @@ def api_agenda():
             for canon, patrones in _DEP_PATRONES.items():
                 if any(p.search(celda) for p in patrones):
                     dep[canon] += 1
+            for canon, patrones in _EMP_PATRONES.items():
+                if any(p.search(celda) for p in patrones):
+                    emp[canon] += 1
 
             fn = fecha_norm(f.get("FECHA Y HORA", ""))
             if fn:
@@ -1888,6 +1910,7 @@ def api_agenda():
             "carga": dict(carga),
             "edo": dict(edo),
             "dep": dict(dep_colapsado),
+            "empresas": dict(emp),
             "serie": dict(serie),
             "agenda": construir_agenda(filas, fecha_piso, fecha_tope, fecha_dt, hora_de, inv),
         })
