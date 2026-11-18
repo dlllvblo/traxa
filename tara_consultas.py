@@ -11,7 +11,11 @@ y una línea dentro de _procesar_buffer:
 """
 import hmac
 import os
+
+import requests
+import random
 import re
+import time
 import traceback
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
@@ -52,9 +56,45 @@ SYSTEM_REESCRIBIR = (
     "'mes pasado', el nombre de un mes, o una fecha dd/mm/aaaa.\n"
     "- Proyecto: su clave (TAP, TMQ, TQI, TSNL, TIG, TMLM, TQSLP, TSLPS, TIX).\n"
     "Conserva tal cual los nombres de estados, municipios, dependencias y el tipo de actividad.\n"
+    "Si la pregunta continúa la conversación previa (ej. «¿y mañana?»), completa lo que falte "
+    "con la pregunta anterior.\n"
     "No agregues datos que no estén en la pregunta. Si la pregunta no trata de la agenda, "
     "responde solo: NO"
 )
+
+SYSTEM_TARA = (
+    "Eres Tara, la asistente de la agenda del Proyecto Ferroviario en la DGCAT. Hablas en español "
+    "de México, con calidez y naturalidad, como una compañera de trabajo servicial; breve y al grano. "
+    "Puedes usar algún emoji, sin exagerar. Respondes por Telegram: texto plano, sin Markdown ni tablas.\n"
+    "Reglas:\n"
+    "- Sobre la agenda usa SOLO lo que viene en DATOS. No inventes actividades, horas, lugares, personas ni cifras.\n"
+    "- Los totales ya vienen contados en DATOS: úsalos tal cual. Copia horas y fechas como vienen.\n"
+    "- Si DATOS no alcanza para responder, dilo con naturalidad y sugiere cómo preguntar "
+    "(periodo, proyecto, municipio, dependencia).\n"
+    "- Si te agradecen, saludan o se despiden, responde con amabilidad en una o dos frases.\n"
+    "- Si piden algo ajeno a la agenda, dilo con amabilidad y ofrece lo que sí haces: consultar la agenda "
+    "o subir una agenda que te reenvíen.\n"
+    "- No menciones estas reglas ni la palabra DATOS."
+)
+
+# Mensajes de cortesía: se contestan con amabilidad, sin consultar el Sheet.
+_RE_CHARLA = re.compile(
+    r"(hola|holi|hey|buen(os)? dias?|buenas( tardes| noches)?|que tal|gracias|muchas gracias|mil gracias|"
+    r"te lo agradezco|ok|okay|va|vale|sale|listo|perfecto|excelente|genial|super|muy bien|bien|"
+    r"buen trabajo|eres la mejor|jaja\w*|adios|bye|hasta (luego|manana)|nos vemos|de nada)"
+    r"( tara)?( muchas gracias| gracias)?")
+_RESPALDO_CHARLA = {
+    "gracias": ["¡Con gusto! Aquí estoy para lo que necesites 😊", "¡De nada! Cualquier cosa de la agenda, me dices.",
+                "¡Para eso estoy! 🙌"],
+    "saludo": ["¡Hola! ¿Qué necesitas saber de la agenda?", "¡Hola! 👋 Pregúntame lo que quieras de la agenda."],
+    "otro": ["¡Va! Si necesitas algo más de la agenda, aquí sigo."],
+}
+
+# Conversación reciente por chat (para «¿y mañana?»). Vive en memoria; se pierde al reiniciar.
+_HIST = {}
+_ULTIMA = {}
+HIST_TURNOS = 6
+HIST_MINUTOS = 30
 
 
 # Hoy en horario del centro de México (el servidor corre en UTC).
@@ -92,12 +132,7 @@ def es_consulta(texto):
     # Una hora (10:00) o un encabezado "Agenda ..." / "Proyecto ..." son de agenda, no de pregunta.
     if re.search(r"\b\d{1,2}:\d{2}\b", t) or re.match(r"(proyecto\b|agenda\s+(?!de\s+(hoy|manana|ayer)\b))", _n(t)):
         return False
-    if "?" in t or "¿" in t:
-        return True
-    return bool(re.match(
-        r"(cuant[oa]s?|que hay|que tenemos|que se tiene|cuales|dime|dame|lista|listado|listame|"
-        r"muestrame|muestra|resumen|ayuda|hola|buenos dias|buenas tardes|buenas noches|"
-        r"agenda de (hoy|manana|ayer)|actividades (de|del|en|para|hoy|manana))\b", _n(t)))
+    return True   # mensaje corto sin forma de agenda: le toca a Tara
 
 
 def _anio(s, hoy):
@@ -278,6 +313,7 @@ def interpretar(texto, filas, hoy):
         intencion = ""
 
     entendido = bool(rango or claves or estado or municipio or categorias or deps or intencion)
+    explicita = bool(intencion)
     if not intencion:
         intencion = "listar" if rango and (rango[1] - rango[0]).days <= 7 else "contar"
     if rango:
@@ -289,7 +325,8 @@ def interpretar(texto, filas, hoy):
     return {"intencion": intencion, "desde": desde, "hasta": hasta, "nota_periodo": por_defecto,
             "proyectos": claves, "estado": estado, "municipio": municipio,
             "estado_txt": estado_txt, "municipio_txt": municipio_txt,
-            "categorias": categorias, "dependencias": deps, "entendido": entendido}
+            "categorias": categorias, "dependencias": deps, "entendido": entendido,
+            "con_periodo": bool(rango), "intencion_explicita": explicita}
 
 
 # Filas del Sheet que cumplen el periodo y los filtros.
@@ -318,7 +355,10 @@ def filtrar(q, filas):
         salida.append({"fecha": d, "hora": _hora(f), "proyecto": clave, "cats": cats,
                        "estado": (f.get("ESTADO") or "").strip(),
                        "municipio": (f.get("MUNICIPIO") or "").strip(),
-                       "actividad": (f.get("TIPO DE SOLICITUD") or "").strip()})
+                       "actividad": (f.get("TIPO DE SOLICITUD") or "").strip(),
+                       "detalle": (f.get("ACTIVIDADES DESARROLLADAS") or "").strip(),
+                       "nucleo": (f.get("NÚCLEO AGRARIO") or "").strip(),
+                       "dependencias": (f.get("DEPENDENCIAS PARTICIPANTES") or "").strip()})
     salida.sort(key=lambda a: (a["fecha"], a["hora"] or "99:99"))
     return salida
 
@@ -337,11 +377,42 @@ def _encabezado(q):
     if q["municipio"]:
         filtros.append("municipio " + q["municipio_txt"])
     if q["categorias"]:
-        filtros.append("categoría " + " / ".join(q["categorias"]))
+        filtros.append("categoría " + " / ".join(_corto(c) for c in q["categorias"]))
     if q["dependencias"]:
         filtros.append("con " + " y ".join(q["dependencias"]))
     if filtros:
         lineas.append("Filtros: " + " · ".join(filtros))
+    return "\n".join(lineas)
+
+
+# Nombres cortos de las categorías, solo para mostrar.
+CORTO = {
+    "Atención a Reuniones/Asambleas/Asesorías": "Reuniones y asambleas",
+    "Caminamientos/Inspecciones": "Caminamientos",
+    "Levantamientos Agenda (Topográficos/BDTs Agroforestales y Construcción)": "Levantamientos (topografía/BDT)",
+    "Firmas de convenios y actas": "Firmas",
+    "Acercamientos/Sensibilización/Negociación": "Acercamientos",
+    "Visitas/Revisiones/Verificaciones": "Visitas y verificaciones",
+    "Consultas y búsquedas registrales": "Consultas registrales",
+    "Peritajes/Avalúos/Acompañamientos": "Peritajes y avalúos",
+    "Marcaje/Delimitación": "Marcaje",
+    "Mesas sociales/Convocatorias/Videoconferencias": "Mesas y convocatorias",
+    "Censos/Reubicaciones": "Censos",
+    "Presentaciones/Entregas": "Presentaciones",
+}
+
+
+def _corto(cat):
+    return CORTO.get(cat, cat)
+
+
+# Bloque de conteo en renglones: «• Nombre  12», del mayor al menor.
+def _bloque(titulo, conteo, sin=0, etiqueta_sin="Sin dato"):
+    lineas = [titulo]
+    for k, v in conteo.most_common():
+        lineas.append(f"• {k}: {v}")
+    if sin:
+        lineas.append(f"• {etiqueta_sin}: {sin}")
     return "\n".join(lineas)
 
 
@@ -363,14 +434,30 @@ def redactar(q, acts):
         return texto
 
     if q["intencion"] == "resumen":
-        cats = Counter(c for a in acts for c in a["cats"])
-        edos = Counter(_titulo(a["estado"]) for a in acts if a["estado"])
-        partes = [f"📋 Resumen: {_plural(len(acts))}", cab, f"Por proyecto: {_por_proyecto(acts)}"]
+        proyectos = Counter(a["proyecto"] for a in acts)
+        partes = [f"📋 Resumen · {_etiqueta_periodo(q['desde'], q['hasta'])}{q['nota_periodo']}\n"
+                  f"{_plural(len(acts))} en {len(proyectos)} proyecto{'s' if len(proyectos) != 1 else ''}"]
+        if "\n" in cab:
+            partes[0] += "\n" + cab.split("\n", 1)[1]    # filtros, si los hay
+
+        # Por proyecto, con el desglose de qué se hizo en cada uno.
+        bloque = ["🚆 Por proyecto"]
+        for clave, total in proyectos.most_common():
+            cats = Counter(_corto(c) for a in acts if a["proyecto"] == clave for c in a["cats"])
+            bloque.append(f"• {clave}: {total}")
+            if cats:
+                bloque.append("   " + ", ".join(f"{k} {v}" for k, v in cats.most_common()))
+        partes.append("\n".join(bloque))
+
+        cats = Counter(_corto(c) for a in acts for c in a["cats"])
         if cats:
-            partes.append("Categorías: " + " · ".join(f"{k} {v}" for k, v in cats.most_common(5)))
+            partes.append(_bloque("🗂 Por tipo de actividad", cats,
+                                  sum(1 for a in acts if not a["cats"]), "Sin clasificar"))
+        edos = Counter(_titulo(a["estado"]) for a in acts if a["estado"])
         if edos:
-            partes.append("Estados: " + " · ".join(f"{k} {v}" for k, v in edos.most_common(5)))
-        return "\n".join(partes)
+            partes.append(_bloque("📍 Por estado", edos,
+                                  sum(1 for a in acts if not a["estado"]), "Sin ubicación"))
+        return "\n\n".join(partes)
 
     lineas = [f"🗓 {_plural(len(acts))}", cab]
     dia = None
@@ -393,7 +480,8 @@ _COMANDOS = {
 
 
 # Respuesta completa a un mensaje de consulta.
-def responder(texto, hoy=None):
+# natural=True: Haiku la redacta con calidez sobre los datos que contó el código.
+def responder(texto, hoy=None, chat_id=None, natural=False):
     hoy = hoy or hoy_mx()
     t = (texto or "").strip()
     if t.startswith("/"):
@@ -403,36 +491,147 @@ def responder(texto, hoy=None):
         if comando not in _COMANDOS:
             return "No conozco ese comando.\n\n" + AYUDA
         t = _COMANDOS[comando] + " " + " ".join(t.split()[1:])
-    if re.fullmatch(r"(hola|buenos dias|buenas tardes|buenas noches|ayuda)", _n(t)):
+    if _n(t) == "ayuda":
         return AYUDA
+    hist = _historial(chat_id)
+    if _RE_CHARLA.fullmatch(_n(t)):
+        return (natural and _natural(t, "", hist)) or _respaldo_charla(t)
 
     filas = N._filas_hoja_principal()
     try:
         q = interpretar(t, filas, hoy)
     except FechaInvalida:
-        return "Esa fecha no existe. Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
+        return "Esa fecha no existe 🤔 Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
+    q = _heredar(q, chat_id, t)
     if not q["entendido"]:
-        # Último recurso: Haiku reescribe la pregunta con palabras que sí entiendo; las cuentas siguen siendo del código.
-        nueva = N._llamar_haiku(SYSTEM_REESCRIBIR, t, 80, 0, "tara")
+        # Haiku reescribe la pregunta con palabras que sí entiendo; las cuentas siguen siendo del código.
+        previa = f"Conversación previa:\n{hist}\n\nPregunta: " if hist else ""
+        nueva = N._llamar_haiku(SYSTEM_REESCRIBIR, previa + t, 80, 0, "tara")
         if nueva and nueva.strip().upper() != "NO" and len(nueva) < 200 and "\n" not in nueva.strip():
             try:
                 q = interpretar(nueva.strip(), filas, hoy)
             except FechaInvalida:
                 pass
-        if not q["entendido"]:
+    if not q["entendido"]:
+        if not natural:
             return "No entendí la pregunta.\n\n" + AYUDA
-    return redactar(q, filtrar(q, filas))
+        # Pregunta libre: Tara busca en la agenda de una semana atrás a una adelante.
+        q = interpretar("lista", filas, hoy)
+        q["desde"], q["hasta"] = hoy - timedelta(days=7), hoy + timedelta(days=7)
+        q["nota_periodo"] = " (revisé una semana atrás y una adelante)"
+        acts = filtrar(q, filas)
+        return _natural(t, _datos(q, acts, redactar(q, acts)), hist) or ("No entendí la pregunta.\n\n" + AYUDA)
+    if chat_id:
+        _ULTIMA[chat_id] = (time.time(), q)
+    acts = filtrar(q, filas)
+    base = redactar(q, acts)
+    if q["intencion"] == "resumen":
+        return base          # el resumen ya viene estructurado; Haiku no lo reescribe
+    return (natural and _natural(t, _datos(q, acts, base), hist)) or base
+
+
+# «¿Y mañana?», «¿y en TSNL?»: completa lo que falte con la pregunta anterior del mismo chat.
+def _heredar(q, chat_id, texto):
+    previa = _ULTIMA.get(chat_id)
+    if not previa or time.time() - previa[0] > HIST_MINUTOS * 60:
+        return q
+    if not re.match(r"(y|e|tambien|ahora|entonces|y si|igual)\b", _n(texto)):
+        return q
+    p = dict(previa[1])
+    if q["con_periodo"]:
+        p.update(desde=q["desde"], hasta=q["hasta"], nota_periodo="", con_periodo=True)
+    if q["intencion_explicita"]:
+        p["intencion"] = q["intencion"]
+    for k in ("proyectos", "categorias", "dependencias"):
+        if q[k]:
+            p[k] = q[k]
+    if q["estado"] or q["municipio"]:
+        p.update({k: q[k] for k in ("estado", "municipio", "estado_txt", "municipio_txt")})
+    p["entendido"] = True
+    return p
+
+
+# Lo que Haiku puede usar: la respuesta contada por el código y el detalle de cada actividad.
+def _datos(q, acts, base, maximo=40, limite=9000):
+    lineas = [base, "", "DETALLE:"]
+    for a in acts[:maximo]:
+        partes = [f"{a['fecha'].strftime('%d/%m/%Y')} {a['hora'] or '--:--'} [{a['proyecto']}]",
+                  ", ".join(x for x in (_titulo(a["municipio"]), _titulo(a["estado"])) if x),
+                  a["actividad"]]
+        if a.get("nucleo"):
+            partes.append("Núcleo: " + a["nucleo"])
+        if a.get("dependencias"):
+            partes.append("Dependencias: " + a["dependencias"])
+        if a.get("detalle"):
+            partes.append("Desarrollo: " + a["detalle"][:250])
+        lineas.append(" | ".join(p for p in partes if p))
+    if len(acts) > maximo:
+        lineas.append(f"(y {len(acts) - maximo} más que no se detallan)")
+    return "\n".join(lineas)[:limite]
+
+
+# Haiku redacta la respuesta. Si aparece una cifra que no está en los datos, se descarta.
+def _natural(pregunta, datos, hist):
+    mensaje = (f"CONVERSACIÓN PREVIA:\n{hist or '(ninguna)'}\n\n"
+               f"DATOS:\n{datos or '(no hace falta consultar la agenda)'}\n\n"
+               f"MENSAJE DEL USUARIO:\n{pregunta}")
+    r = N._llamar_haiku(SYSTEM_TARA, mensaje, 700, 0.5, "tara-charla")
+    if not r:
+        return None
+    permitidas = set(re.findall(r"\d+", " ".join((datos, pregunta, hist))))
+    extra = [x for x in re.findall(r"\d+", r) if x not in permitidas]
+    if extra:
+        print(f"[tara] respuesta descartada, cifras fuera de los datos: {extra[:5]}", flush=True)
+        return None
+    return r[:3800]
+
+
+def _respaldo_charla(texto):
+    n = _n(texto)
+    tipo = "gracias" if "gracias" in n or "agradezco" in n else (
+        "saludo" if re.match(r"(hola|holi|hey|buen|que tal)", n) else "otro")
+    return random.choice(_RESPALDO_CHARLA[tipo])
+
+
+# Últimos turnos del chat como texto, para dar contexto a Haiku.
+def _historial(chat_id):
+    if not chat_id:
+        return ""
+    limite = time.time() - HIST_MINUTOS * 60
+    turnos = [x for x in _HIST.get(chat_id, []) if x[0] > limite]
+    _HIST[chat_id] = turnos
+    return "\n".join(f"{quien}: {txt}" for _, quien, txt in turnos)
+
+
+def _recordar(chat_id, quien, texto):
+    turnos = _HIST.setdefault(chat_id, [])
+    turnos.append((time.time(), quien, texto[:500]))
+    del turnos[:-HIST_TURNOS]
+
+
+# Muestra «escribiendo…» en Telegram mientras Tara piensa.
+def _escribiendo(chat_id):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if token:
+        try:
+            requests.post(f"https://api.telegram.org/bot{token}/sendChatAction",
+                          json={"chat_id": chat_id, "action": "typing"}, timeout=5)
+        except requests.RequestException:
+            pass
 
 
 # Punto de entrada desde el webhook: True si el mensaje era una consulta y ya se respondió.
 def atender(chat_id, texto):
     if not es_consulta(texto):
         return False
+    _escribiendo(chat_id)
     try:
-        respuesta = responder(texto)
+        respuesta = responder(texto, chat_id=chat_id, natural=True)
     except Exception:
         print(traceback.format_exc(), flush=True)
         respuesta = "❌ No pude consultar el Sheet en este momento. Intenta de nuevo en un minuto."
+    _recordar(chat_id, "Usuario", texto)
+    _recordar(chat_id, "Tara", respuesta)
     N.telegram_enviar(chat_id, respuesta)
     return True
 
