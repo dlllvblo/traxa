@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TRAXA · Mapa de Actividades</title>
+<title>TRAXA · Geovisualizador</title>
 <link rel="icon" type="image/png" href="/static/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,6 +24,7 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'Noto Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;padding:18px}
 
+  /* Encabezado */
   .topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 20px;margin-bottom:16px;
     background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
   .brand{display:flex;align-items:center;gap:14px}
@@ -34,7 +35,7 @@
   .spacer{flex:1 1 20px}
   .filtro{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.66rem;color:var(--muted);font-weight:700}
   .filtro input,.filtro select{font:inherit;font-weight:400;color:var(--text);background:var(--board);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
-  .btn{display:inline-flex;align-items:center;background:var(--board);color:var(--text);border:1px solid var(--line);border-radius:9px;
+  .btn{display:inline-flex;align-items:center;gap:6px;background:var(--board);color:var(--text);border:1px solid var(--line);border-radius:9px;
     padding:8px 14px;font-family:inherit;font-size:.74rem;cursor:pointer;text-decoration:none}
   .btn:hover{background:#fff}
   .btn.fuerte{background:#a42145;color:#fff}
@@ -42,18 +43,52 @@
   .btn:focus-visible,.filtro input:focus-visible,.filtro select:focus-visible{outline:2px solid var(--guinda);outline-offset:2px}
   .banner{display:none;background:rgba(162,30,66,.10);border:1px solid var(--guinda);color:var(--guinda-deep);padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:.8rem}
 
-  .lienzo{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+  /* Lienzo: capas | mapa | resumen */
+  .lienzo{display:grid;grid-template-columns:290px minmax(0,1fr) 320px;gap:16px;align-items:start}
   .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-  .mapa-wrap{position:relative}
-  #mapa{height:calc(100vh - 150px);min-height:480px;background:#1d2b33;z-index:0}
-  .lado{display:flex;flex-direction:column;gap:16px}
-  .lado .panel{padding:16px 18px}
+  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .col .panel{padding:16px 18px}
   h2{font-family:'Patria','Noto Sans',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-strong);margin-bottom:12px}
-  .periodo{font-size:.74rem;color:var(--muted);margin-bottom:12px}
+  .mapa-wrap{position:relative}
+  #mapa{height:calc(100vh - 150px);min-height:520px;background:#1d2b33;z-index:0}
+
+  /* Capas temáticas */
+  .capas{display:flex;flex-direction:column;gap:2px;max-height:calc(100vh - 470px);min-height:260px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+  .capa{position:relative;display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:.74rem;line-height:1.25;border:1px solid transparent}
+  .capa:hover{background:var(--board)}
+  .capa input{position:absolute;opacity:0;pointer-events:none}
+  .capa .nom{overflow-wrap:anywhere}
+  .capa .sw{width:14px;height:14px;border-radius:4px;background:var(--c);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+  .capa .n{font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-strong);font-size:.72rem}
+  .capa.sub{padding-left:26px;font-size:.7rem}
+  .capa.vacia{opacity:.45}
+  .capa:has(input:checked){background:#fff;border-color:var(--line);box-shadow:0 2px 8px -4px rgba(110,21,46,.35)}
+  .capa:has(input:checked) .nom{font-weight:700;color:var(--text-strong)}
+  .capa:has(input:focus-visible){outline:2px solid var(--guinda);outline-offset:1px}
+  .sep{border-top:1px solid var(--line-soft);margin:6px 0}
+
+  /* Mapa base y referencias */
+  .opciones{display:flex;flex-direction:column;gap:8px;font-size:.74rem}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--board);border:1px solid var(--line-soft);border-radius:9px;padding:3px}
+  .seg label{position:relative;text-align:center;padding:6px 4px;border-radius:7px;cursor:pointer;font-size:.68rem}
+  .seg input{position:absolute;opacity:0;pointer-events:none}
+  .seg label:has(input:checked){background:#a42145;color:#fff;font-weight:600}
+  .seg label:has(input:focus-visible){outline:2px solid var(--guinda)}
+  .chk{display:flex;align-items:center;gap:8px;cursor:pointer}
+  .chk input{accent-color:#a42145;width:15px;height:15px}
+  .rango{display:flex;align-items:center;gap:10px}
+  .rango input{flex:1;accent-color:#a42145}
+  .rango span{font-variant-numeric:tabular-nums;width:34px;text-align:right;font-weight:600}
+  .sub-t{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:4px}
+
+  /* Resumen y listas */
+  .capa-actual{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.8rem;color:var(--text-strong);margin-bottom:4px}
+  .capa-actual i{width:12px;height:12px;border-radius:3px;flex:0 0 auto}
+  .periodo{font-size:.72rem;color:var(--muted);margin-bottom:12px}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .kpi{text-align:center;border:1px solid var(--line-soft);border-radius:9px;padding:9px 4px;background:#fff}
-  .kpi .n{font-family:'Patria','Noto Sans',sans-serif;font-weight:700;font-size:1.5rem;line-height:1;color:var(--text-strong);font-variant-numeric:tabular-nums}
-  .kpi .t{font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+  .kpi .n{font-family:'Patria','Noto Sans',sans-serif;font-weight:700;font-size:1.45rem;line-height:1;color:var(--text-strong);font-variant-numeric:tabular-nums}
+  .kpi .t{font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:5px}
   .lista{max-height:330px;overflow-y:auto}
   .item{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;
     border-top:1px solid var(--line-soft);padding:8px 2px;font:inherit;color:inherit;cursor:pointer}
@@ -73,36 +108,62 @@
   footer .mono{font-family:'Noto Sans',sans-serif;color:var(--muted)}
 
   /* Leyenda y globo del mapa */
-  .leyenda{position:absolute;left:10px;bottom:28px;z-index:2;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2}
+  .leyenda{position:absolute;left:10px;bottom:28px;z-index:2;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2;max-width:230px}
   .leyenda b{display:block;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-strong);margin-bottom:6px}
   .leyenda div{display:flex;align-items:center;gap:7px;margin-top:3px;font-variant-numeric:tabular-nums}
   .leyenda i{width:16px;height:11px;border-radius:2px;border:1px solid rgba(110,21,46,.35);flex:0 0 auto}
-  .maplibregl-popup-content{font-family:'Noto Sans',sans-serif;font-size:.76rem;color:var(--text);padding:12px 14px;min-width:210px;border-radius:9px}
+  .maplibregl-popup-content{font-family:'Noto Sans',sans-serif;font-size:.76rem;color:var(--text);padding:12px 14px;min-width:220px;border-radius:9px;max-height:360px;overflow-y:auto}
   .tip .maplibregl-popup-content{min-width:0;padding:4px 8px;font-size:.72rem}
   .tip .maplibregl-popup-tip{display:none}
   .glb h3{font-family:'Patria','Noto Sans',sans-serif;font-size:1rem;color:var(--text-strong);line-height:1.15}
   .glb .e{font-size:.68rem;color:var(--muted);margin-bottom:7px}
   .glb .t{font-weight:700;margin-bottom:6px}
   .glb .pc{display:inline-block;font-size:.64rem;font-weight:700;color:#fff;border-radius:4px;padding:1px 5px;margin:0 4px 4px 0}
+  .glb .cats{margin:6px 0;border-top:1px solid var(--line-soft);padding-top:6px;font-size:.68rem}
+  .glb .cats div{display:flex;justify-content:space-between;gap:10px}
+  .glb .cats div.act{font-weight:700;color:var(--text-strong)}
   .glb ul{list-style:none;margin-top:6px;border-top:1px solid var(--line-soft);padding-top:6px}
   .glb li{font-size:.68rem;line-height:1.35;margin-bottom:4px}
   .glb li span{color:var(--muted);font-variant-numeric:tabular-nums}
 
-  @media (max-width:980px){.lienzo{grid-template-columns:1fr}#mapa{height:62vh;min-height:380px}}
-  @media (max-width:560px){body{padding:12px}}
-  /* Teléfono: filtros en rejilla y la leyenda arriba, sin taparse con los créditos del mapa */
+  /* Manual */
+  .manual{position:fixed;inset:0;z-index:50;background:rgba(40,16,24,.55);display:none;align-items:center;justify-content:center;padding:18px}
+  .manual.abierto{display:flex}
+  .manual .hoja{background:#fff;border-radius:16px;border:1px solid var(--line);box-shadow:0 30px 60px -20px rgba(0,0,0,.5);max-width:760px;width:100%;max-height:calc(100vh - 36px);display:flex;flex-direction:column;overflow:hidden}
+  .manual .cab{background:linear-gradient(135deg,var(--guinda),var(--guinda-deep));color:#fff;padding:18px 22px;border-bottom:4px solid var(--dorado)}
+  .manual .cab b{font-family:'Patria','Noto Sans',sans-serif;font-size:1.3rem;letter-spacing:.03em;display:block}
+  .manual .cab span{font-size:.7rem;letter-spacing:.24em;text-transform:uppercase;opacity:.9}
+  .manual .cuerpo{padding:18px 22px;overflow-y:auto;font-size:.8rem;line-height:1.55}
+  .manual h3{font-family:'Patria','Noto Sans',sans-serif;font-size:.95rem;color:var(--text-strong);margin:14px 0 6px;display:flex;align-items:center;gap:8px}
+  .manual h3:first-child{margin-top:0}
+  .manual h3 em{font-style:normal;font-family:'Noto Sans',sans-serif;font-size:.68rem;font-weight:700;color:#fff;background:var(--dorado);border-radius:50%;width:20px;height:20px;display:grid;place-items:center;flex:0 0 auto}
+  .manual ul{margin:4px 0 0 18px}
+  .manual li{margin-bottom:3px}
+  .manual .pie{padding:14px 22px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:10px;background:var(--panel-2)}
+
+  @media (max-width:1280px){
+    .lienzo{grid-template-columns:280px minmax(0,1fr)}
+    .col.der{grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  }
+  @media (max-width:980px){
+    .lienzo{grid-template-columns:1fr}
+    .col.izq{order:2}.mapa-wrap{order:1}.col.der{order:3}
+    #mapa{height:62vh;min-height:380px}
+    .capas{max-height:none}
+  }
   @media (max-width:560px){
+    body{padding:12px}
     .topbar{padding:14px;gap:10px}.spacer{display:none}
     .filtro{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
     .filtro label{display:flex;flex-direction:column;gap:4px}
     .filtro label:nth-child(3){grid-column:1 / -1}
     .filtro input,.filtro select{width:100%;min-width:0;font-size:.8rem;padding:8px}
-    .filtro .btn,.topbar>.btn{justify-content:center;width:100%}
-    .filtro .btn{grid-column:1 / -1}
-    .topbar>.btn{flex:1 1 100%}
+    .filtro .btn{grid-column:1 / -1;justify-content:center}
+    .topbar>.btn{flex:1 1 40%;justify-content:center}
     #mapa{height:58vh;min-height:340px}
-    .leyenda{top:10px;right:10px;left:auto;bottom:auto;padding:7px 9px;font-size:.62rem}
+    .leyenda{top:10px;right:10px;left:auto;bottom:auto;padding:7px 9px;font-size:.62rem;max-width:170px}
     .leyenda b{font-size:.52rem;margin-bottom:4px}
+    .manual{padding:8px}.manual .cuerpo{padding:14px 16px}
   }
 </style>
 </head>
@@ -112,10 +173,10 @@
     <div class="brand">
       <div class="logo" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>
+          <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>
         </svg>
       </div>
-      <div><h1>Mapa de Actividades</h1><div class="sub">Por Municipio</div></div>
+      <div><h1>Geovisualizador</h1><div class="sub">Actividades por municipio</div></div>
     </div>
     <div class="spacer"></div>
     <div class="filtro">
@@ -124,21 +185,46 @@
       <label>Proyecto <select id="f-proy"><option value="">Todos</option></select></label>
       <button class="btn fuerte" id="b-ver">Ver</button>
     </div>
+    <button class="btn" id="b-manual" aria-label="Abrir el manual">? Manual</button>
     <a class="btn" href="/dashboard">Volver al tablero</a>
   </div>
 
   <div class="banner" id="banner"></div>
 
   <div class="lienzo">
-    <div class="panel mapa-wrap"><div id="mapa" role="application" aria-label="Mapa de actividades por municipio"></div>
+    <div class="col izq">
+      <div class="panel">
+        <h2>Capas temáticas</h2>
+        <div class="capas" id="capas" role="radiogroup" aria-label="Capas temáticas"></div>
+      </div>
+      <div class="panel">
+        <h2>Mapa base</h2>
+        <div class="opciones">
+          <div class="seg" role="radiogroup" aria-label="Mapa base">
+            <label><input type="radio" name="base" value="sat" checked>Satélite</label>
+            <label><input type="radio" name="base" value="topo">Topográfico</label>
+            <label><input type="radio" name="base" value="gris">Gris</label>
+          </div>
+          <div class="sub-t">Referencias</div>
+          <label class="chk"><input type="checkbox" id="r-lugares" checked> Nombres de lugares</label>
+          <label class="chk"><input type="checkbox" id="r-edos" checked> Límites estatales</label>
+          <label class="chk"><input type="checkbox" id="r-muns" checked> Límites municipales</label>
+          <div class="sub-t">Opacidad de la capa temática</div>
+          <div class="rango"><input type="range" id="r-opac" min="20" max="100" value="65" aria-label="Opacidad"><span id="r-opac-v">65%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel mapa-wrap"><div id="mapa" role="application" aria-label="Geovisualizador de actividades por municipio"></div>
       <div class="leyenda" id="leyenda"></div></div>
 
-    <div class="lado">
+    <div class="col der">
       <div class="panel">
         <h2>Resumen</h2>
+        <div class="capa-actual" id="capa-actual"></div>
         <div class="periodo" id="periodo">Cargando…</div>
         <div class="kpis">
-          <div class="kpi"><div class="n" id="k-total">0</div><div class="t">Actividades</div></div>
+          <div class="kpi"><div class="n" id="k-total">0</div><div class="t">En la capa</div></div>
           <div class="kpi"><div class="n" id="k-mun">0</div><div class="t">Municipios</div></div>
           <div class="kpi"><div class="n" id="k-sin">0</div><div class="t">Sin ubicar</div></div>
         </div>
@@ -149,7 +235,7 @@
       </div>
       <div class="panel" id="p-sin" style="display:none">
         <h2>Sin ubicar en el mapa</h2>
-        <p class="nota">Actividades cuyo ESTADO o MUNICIPIO en el Sheet está vacío o no coincide con un municipio de INEGI.</p>
+        <p class="nota">Actividades del periodo cuyo ESTADO o MUNICIPIO en el Sheet está vacío o no coincide con un municipio de INEGI.</p>
         <div class="chips" id="sin"></div>
       </div>
     </div>
@@ -159,21 +245,83 @@
     <span class="mono">Registro Agrario Nacional · Dirección de Gestión Territorial</span>
   </footer>
 
+  <!-- Manual: se muestra cada vez que se abre el geovisualizador -->
+  <div class="manual abierto" id="manual" role="dialog" aria-modal="true" aria-labelledby="manual-t">
+    <div class="hoja">
+      <div class="cab"><b id="manual-t">Geovisualizador TRAXA</b><span>Manual de uso</span></div>
+      <div class="cuerpo">
+        <h3><em>1</em>¿Qué muestra?</h3>
+        <p>Las actividades registradas en la agenda (el mismo Sheet del tablero y del conteo), ubicadas en el municipio donde se realizaron. Cada municipio se colorea según cuántas actividades tuvo en el periodo: más oscuro, más actividades.</p>
+
+        <h3><em>2</em>Capas temáticas</h3>
+        <ul>
+          <li><b>Todas las actividades</b>: el total por municipio.</li>
+          <li><b>Una capa por categoría</b>, las mismas de la pantalla de Conteo (Reuniones, Caminamientos, Levantamientos, Firmas, etc.). Al elegir una, el mapa muestra solo los municipios con esa categoría.</li>
+          <li><b>Subcapas de Levantamientos</b>: BDTs Construcción, BDTs Agroforestal y Topográficos/Mediciones.</li>
+          <li><b>Sin clasificar</b>: actividades que no entraron en ninguna categoría; sirve para revisar y mejorar la clasificación.</li>
+          <li>El número junto a cada capa es su total en el periodo y coincide con el Conteo. Las capas en gris no tienen actividades en el periodo.</li>
+          <li>Se ve una capa a la vez; cada una tiene su propio color.</li>
+        </ul>
+
+        <h3><em>3</em>Filtros</h3>
+        <ul>
+          <li><b>Desde / Hasta</b>: el periodo a consultar. Al abrir, va del 1 de enero a hoy.</li>
+          <li><b>Proyecto</b>: limita el mapa a un tramo ferroviario. Muestra entre paréntesis cuántas actividades tiene cada uno en el periodo.</li>
+          <li>Presiona <b>Ver</b> para aplicar las fechas. El proyecto se aplica al elegirlo.</li>
+        </ul>
+
+        <h3><em>4</em>Mapa base y referencias</h3>
+        <ul>
+          <li><b>Satélite</b>, <b>Topográfico</b> o <b>Gris</b> como fondo.</li>
+          <li>Puedes ocultar los nombres de lugares y los límites estatales o municipales (INEGI, Marco Geoestadístico 2025).</li>
+          <li><b>Opacidad</b>: hace más o menos transparente el color de los municipios para ver el fondo.</li>
+        </ul>
+
+        <h3><em>5</em>Leyenda</h3>
+        <p>Abajo a la izquierda del mapa (arriba a la derecha en el teléfono). Indica la capa activa y los rangos de cada tono. Los rangos se recalculan con los datos de cada capa y periodo.</p>
+
+        <h3><em>6</em>Consultar un municipio</h3>
+        <ul>
+          <li><b>Pasa el cursor</b> sobre un municipio coloreado para ver su nombre y su número en la capa.</li>
+          <li><b>Toca o da clic</b> para abrir su ficha: total, actividades por proyecto, desglose por categoría y las 5 actividades más recientes de la capa activa.</li>
+          <li>En <b>Municipios con más actividades</b>, toca uno para ir a él en el mapa.</li>
+          <li>Usa <b>+ / −</b>, la rueda del mouse o los dedos para acercar y alejar, y el botón de pantalla completa.</li>
+        </ul>
+
+        <h3><em>7</em>Para leer bien los números</h3>
+        <ul>
+          <li>Una actividad puede contar en más de una categoría (por ejemplo, una reunión con firma), igual que en el Conteo; por eso la suma de las capas puede ser mayor que el total.</li>
+          <li>Si una actividad se registró en varios municipios, cuenta en cada uno.</li>
+          <li><b>Sin ubicar</b> son actividades que no se pudieron colocar en el mapa porque el Sheet no trae un municipio reconocible; se listan en el panel de la derecha para corregirlas.</li>
+        </ul>
+      </div>
+      <div class="pie"><button class="btn fuerte" id="b-cerrar">Entendido, ir al mapa</button></div>
+    </div>
+  </div>
+
 <script>
 const $=id=>document.getElementById(id);
 const PROY={TAP:['AIFA – Pachuca','#8E1B3A'],TMQ:['México – Querétaro','#245C4F'],TQI:['Querétaro – Irapuato','#A8803F'],
   TSNL:['Saltillo – Nuevo Laredo','#9A7B3C'],TIG:['Irapuato – Guadalajara','#6E152E'],TMLM:['Mazatlán – Los Mochis','#2F8270'],
   TQSLP:['Querétaro – San Luis Potosí','#B5772E'],TSLPS:['San Luis Potosí – Saltillo','#6E7C58'],TIX:['Trolebús Ixtapaluca','#4F6D8A'],
   OTRO:['Sin proyecto reconocido','#A8957F']};
-const RAMPA=['#F3D9DF','#E2A3B2','#CC6A83','#A42145','#6E152E'];
+// Misma paleta y orden que la pantalla de Conteo.
+const PALETA=['#8E1B3A','#245C4F','#A8803F','#B5772E','#6E7C58','#6E152E','#2F8270','#9C5A3E','#4E7C70','#C9A86A','#B04A4A','#5A7A8E','#7A5C8E','#8A6A2E'];
+const COLOR_SUB=['#B5772E','#6E152E','#2F8270'], COLOR_SIN='#7D6B5D', COLOR_TODAS='#a42145';
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=n=>Number(n||0).toLocaleString('es-MX');
 const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
 const MUN={source:'lim',sourceLayer:'municipios'};
 
-// Límites INEGI 2025 a detalle (archivo propio) sobre imagen satelital de Esri.
+// Cinco tonos de un color: del claro al oscuro.
+function mezcla(hex,con,t){const a=parseInt(hex.slice(1),16),b=parseInt(con.slice(1),16);
+  const c=[16,8,0].map(s=>Math.round(((a>>s)&255)*(1-t)+((b>>s)&255)*t));return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');}
+function rampa(hex){return [mezcla(hex,'#ffffff',.78),mezcla(hex,'#ffffff',.52),mezcla(hex,'#ffffff',.25),hex,mezcla(hex,'#000000',.35)];}
+
+// Mapa: fondos de Esri y límites INEGI 2025 propios (PMTiles).
 const proto=new pmtiles.Protocol();
 maplibregl.addProtocol('pmtiles',proto.tile);
+const raster=(p,attr)=>({type:'raster',tiles:[ESRI+p+'/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:attr});
 const mapa=new maplibregl.Map({
   container:'mapa',
   bounds:[[-117.5,14.4],[-86.6,32.8]],
@@ -181,17 +329,20 @@ const mapa=new maplibregl.Map({
   attributionControl:{compact:true},
   style:{version:8,
     sources:{
-      sat:{type:'raster',tiles:[ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,
-        attribution:'Imagen: Esri, Maxar, Earthstar Geographics'},
-      ref:{type:'raster',tiles:[ESRI+'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19},
+      sat:raster('World_Imagery','Imagen: Esri, Maxar, Earthstar Geographics'),
+      topo:raster('World_Topo_Map','Mapa: Esri, HERE, Garmin, INEGI'),
+      gris:raster('Canvas/World_Light_Gray_Base','Mapa: Esri, HERE, Garmin'),
+      ref:raster('Reference/World_Boundaries_and_Places',''),
       lim:{type:'vector',url:'pmtiles://'+location.origin+'/static/mx_limites.pmtiles',promoteId:{municipios:'CVEGEO'},
         attribution:'Límites: INEGI, Marco Geoestadístico 2025'}
     },
     layers:[
       {id:'sat',type:'raster',source:'sat'},
+      {id:'topo',type:'raster',source:'topo',layout:{visibility:'none'}},
+      {id:'gris',type:'raster',source:'gris',layout:{visibility:'none'}},
       {id:'mun-fill',type:'fill',source:'lim','source-layer':'municipios',
         paint:{'fill-color':['coalesce',['feature-state','c'],'#000000'],
-               'fill-opacity':['case',['to-boolean',['feature-state','c']],.62,0]}},
+               'fill-opacity':['case',['to-boolean',['feature-state','c']],.65,0]}},
       {id:'mun-linea',type:'line',source:'lim','source-layer':'municipios',minzoom:6,
         paint:{'line-color':'#FFFFFF','line-opacity':.35,'line-width':['interpolate',['linear'],['zoom'],6,.3,12,1.2]}},
       {id:'mun-activo',type:'line',source:'lim','source-layer':'municipios',
@@ -204,95 +355,103 @@ const mapa=new maplibregl.Map({
     ]}
 });
 mapa.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-left');
+mapa.addControl(new maplibregl.FullscreenControl(),'top-left');
 mapa.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
-// Listo cuando el estilo ya tiene la fuente de límites (no espera al satélite).
 const listo=new Promise(r=>{
   const ok=()=>{if(!mapa.getSource('lim'))return false;r();return true;};
   if(!ok())mapa.on('styledata',function f(){if(ok())mapa.off('styledata',f);});
 });
 
-let cortes=[], porId={};
+let D=null, CAPA='todas', cortes=[], tonos=rampa(COLOR_TODAS), porId={}, colores={};
 
-// Límites de clase (hasta 5) repartidos sobre los valores que sí existen.
+// Valor de un municipio en la capa activa.
+const valor=m=>CAPA==='todas'?m.n:(m.capas[CAPA]||0);
+function nombreCapa(k){if(k==='todas')return 'Todas las actividades';const c=D.capas.find(x=>x.clave===k);return c?c.nombre:k;}
+
 function calcularCortes(valores){
   const u=[...new Set(valores)].sort((a,b)=>a-b);
-  if(u.length<=RAMPA.length)return u;
+  if(u.length<=5)return u;
   const c=[];
-  for(let i=1;i<=RAMPA.length;i++)c.push(u[Math.ceil(i*u.length/RAMPA.length)-1]);
+  for(let i=1;i<=5;i++)c.push(u[Math.ceil(i*u.length/5)-1]);
   return [...new Set(c)];
 }
-function clase(n){let i=cortes.findIndex(c=>n<=c);return i<0?cortes.length-1:i;}
 function color(n){
-  if(cortes.length<=1)return RAMPA[3];
-  return RAMPA[Math.round(clase(n)*(RAMPA.length-1)/(cortes.length-1))];
+  if(cortes.length<=1)return tonos[3];
+  let i=cortes.findIndex(c=>n<=c); if(i<0)i=cortes.length-1;
+  return tonos[Math.round(i*4/(cortes.length-1))];
 }
 
+// Ficha del municipio: total, proyectos, categorías y recientes de la capa activa.
 function globo(m){
-  const proys=Object.entries(m.proyectos).map(([k,v])=>'<span class="pc" style="background:'+((PROY[k]||PROY.OTRO)[1])+'">'+esc(k)+' '+v+'</span>').join('');
-  const rec=m.recientes.map(a=>'<li><span>'+esc(a.fecha)+(a.hora?' '+esc(a.hora):'')+' · '+esc(a.proyecto)+'</span><br>'+esc(a.actividad)+'</li>').join('');
+  const v=valor(m);
+  const proys=Object.entries(m.proyectos).map(([k,n])=>'<span class="pc" style="background:'+((PROY[k]||PROY.OTRO)[1])+'">'+esc(k)+' '+n+'</span>').join('');
+  const cats=D.capas.filter(c=>c.tipo!=='sub'&&m.capas[c.clave]).map(c=>'<div'+(c.clave===CAPA?' class="act"':'')+'><span>'+esc(c.nombre)+'</span><b>'+num(m.capas[c.clave])+'</b></div>').join('');
+  const rec=(m.recientes[CAPA]||[]).map(a=>'<li><span>'+esc(a.fecha)+(a.hora?' '+esc(a.hora):'')+' · '+esc(a.proyecto)+'</span><br>'+esc(a.actividad)+'</li>').join('');
   return '<div class="glb"><h3>'+esc(m.municipio)+'</h3><div class="e">'+esc(m.estado)+'</div>'+
-    '<div class="t">'+num(m.n)+(m.n===1?' actividad':' actividades')+'</div>'+proys+
-    (rec?'<ul>'+rec+'</ul>':'')+'</div>';
+    '<div class="t">'+(CAPA==='todas'?'':esc(nombreCapa(CAPA))+': ')+num(v)+(v===1?' actividad':' actividades')+(CAPA==='todas'?'':' de '+num(m.n))+'</div>'+proys+
+    (cats?'<div class="cats">'+cats+'</div>':'')+(rec?'<ul>'+rec+'</ul>':'')+'</div>';
 }
 
-// Globo al dar clic y etiqueta al pasar el mouse (solo municipios con actividades).
 const tip=new maplibregl.Popup({closeButton:false,closeOnClick:false,className:'tip',offset:14});
-const pop=new maplibregl.Popup({maxWidth:'300px',offset:6});
+const pop=new maplibregl.Popup({maxWidth:'320px',offset:6});
 let hoverId=null;
 function salir(){hoverId=null;mapa.setFilter('mun-hover',['==',['get','CVEGEO'],'']);mapa.getCanvas().style.cursor='';tip.remove();}
 mapa.on('mousemove','mun-fill',e=>{
   const m=porId[e.features[0].properties.CVEGEO];
-  if(!m){if(hoverId!==null)salir();return;}
+  if(!m||!valor(m)){if(hoverId!==null)salir();return;}
   if(hoverId!==m.cvegeo){hoverId=m.cvegeo;mapa.setFilter('mun-hover',['==',['get','CVEGEO'],hoverId]);}
   mapa.getCanvas().style.cursor='pointer';
-  tip.setLngLat(e.lngLat).setHTML(esc(m.municipio)+': <b>'+num(m.n)+'</b>').addTo(mapa);
+  tip.setLngLat(e.lngLat).setHTML(esc(m.municipio)+': <b>'+num(valor(m))+'</b>').addTo(mapa);
 });
 mapa.on('mouseleave','mun-fill',salir);
 mapa.on('click','mun-fill',e=>{
   const m=porId[e.features[0].properties.CVEGEO];
-  if(m){tip.remove();pop.setLngLat(e.lngLat).setHTML(globo(m)).addTo(mapa);}
+  if(m&&valor(m)){tip.remove();pop.setLngLat(e.lngLat).setHTML(globo(m)).addTo(mapa);}
 });
 
-// Colorea los municipios con actividades y encuadra el mapa.
-async function pintarMapa(j){
-  await listo;
-  pop.remove();salir();
-  mapa.removeFeatureState(MUN);
-  j.municipios.forEach(m=>mapa.setFeatureState({...MUN,id:m.cvegeo},{c:color(m.n)}));
-  if(j.municipios.length){
-    const b=j.municipios.reduce((a,m)=>[Math.min(a[0],m.bbox[0]),Math.min(a[1],m.bbox[1]),Math.max(a[2],m.bbox[2]),Math.max(a[3],m.bbox[3])],[180,90,-180,-90]);
-    mapa.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:40,maxZoom:10,duration:600});
-  }
+// Lista de capas con su total y color.
+function pintarCapas(){
+  colores={todas:COLOR_TODAS};
+  let iCat=0,iSub=0;
+  D.capas.forEach(c=>{colores[c.clave]=c.tipo==='sin'?COLOR_SIN:c.tipo==='sub'?COLOR_SUB[iSub++%3]:PALETA[iCat++%PALETA.length];});
+  const fila=(k,nombre,n,tipo)=>'<label class="capa'+(tipo==='sub'?' sub':'')+(n?'':' vacia')+'" style="--c:'+colores[k]+'">'+
+    '<input type="radio" name="capa" value="'+esc(k)+'"'+(k===CAPA?' checked':'')+'><span class="sw"></span><span class="nom">'+esc(nombre).replace(/\//g,'/\u200B')+'</span><span class="n">'+num(n)+'</span></label>';
+  $('capas').innerHTML=fila('todas','Todas las actividades',D.total,'todas')+'<div class="sep"></div>'+
+    D.capas.map(c=>(c.tipo==='sin'?'<div class="sep"></div>':'')+fila(c.clave,c.nombre,c.n,c.tipo)).join('');
 }
+$('capas').addEventListener('change',e=>{
+  if(e.target.name!=='capa')return;
+  CAPA=e.target.value;pintarCapa();
+  if(innerWidth<=980)document.querySelector('.mapa-wrap').scrollIntoView({behavior:'smooth',block:'start'});  // en teléfono, lleva al mapa
+});
 
-function pintar(j){
-  porId={};
-  j.municipios.forEach(m=>porId[m.cvegeo]=m);
-  cortes=calcularCortes(j.municipios.map(m=>m.n));
-  pintarMapa(j);
+// Colorea el mapa y arma leyenda, resumen y lista para la capa activa.
+async function pintarCapa(){
+  const muns=D.municipios.filter(m=>valor(m)>0).sort((a,b)=>valor(b)-valor(a));
+  tonos=rampa(colores[CAPA]||COLOR_TODAS);
+  cortes=calcularCortes(muns.map(valor));
 
-  const v=j.ventana;
-  $('periodo').textContent='Del '+v.desde_txt+' al '+v.hasta_txt+(j.proyecto?' · '+j.proyecto:'');
-  $('k-total').textContent=num(j.total);
-  $('k-mun').textContent=num(j.municipios.length);
-  $('k-sin').textContent=num(j.sin_ubicar);
+  $('capa-actual').innerHTML='<i style="background:'+(colores[CAPA]||COLOR_TODAS)+'"></i>'+esc(nombreCapa(CAPA));
+  const enCapa=CAPA==='todas'?D.total:((D.capas.find(c=>c.clave===CAPA)||{}).n||0);
+  $('k-total').textContent=num(enCapa);
+  $('k-mun').textContent=num(muns.length);
 
   const ley=$('leyenda');
-  if(!cortes.length){ley.innerHTML='<b>Actividades</b><div>Sin datos</div>';}
+  if(!cortes.length){ley.innerHTML='<b>'+esc(nombreCapa(CAPA))+'</b><div>Sin actividades en el periodo</div>';}
   else{
     let ini=1;
-    ley.innerHTML='<b>Actividades por municipio</b>'+cortes.map(c=>{
+    ley.innerHTML='<b>'+esc(nombreCapa(CAPA))+'</b>'+cortes.map(c=>{
       const txt=ini>=c?num(c):num(ini)+' – '+num(c); const h='<div><i style="background:'+color(c)+'"></i>'+txt+'</div>'; ini=c+1; return h;
     }).join('');
   }
 
   const lista=$('lista');
   lista.innerHTML='';
-  if(!j.municipios.length){lista.innerHTML='<div class="vacio">Sin actividades ubicadas en el periodo.</div>';}
-  j.municipios.slice(0,40).forEach((m,i)=>{
+  if(!muns.length){lista.innerHTML='<div class="vacio">Ningún municipio con actividades de esta capa en el periodo.</div>';}
+  muns.slice(0,40).forEach((m,i)=>{
     const b=document.createElement('button');
     b.className='item';b.type='button';
-    b.innerHTML='<span class="r">'+String(i+1).padStart(2,'0')+'</span><span class="m">'+esc(m.municipio)+'<span>'+esc(m.estado)+'</span></span><span class="v">'+num(m.n)+'</span>';
+    b.innerHTML='<span class="r">'+String(i+1).padStart(2,'0')+'</span><span class="m">'+esc(m.municipio)+'<span>'+esc(m.estado)+'</span></span><span class="v">'+num(valor(m))+'</span>';
     b.addEventListener('click',()=>{
       mapa.fitBounds([[m.bbox[0],m.bbox[1]],[m.bbox[2],m.bbox[3]]],{maxZoom:12,padding:40});
       tip.remove();pop.setLngLat(m.punto).setHTML(globo(m)).addTo(mapa);
@@ -300,13 +459,34 @@ function pintar(j){
     lista.appendChild(b);
   });
 
+  await listo;
+  pop.remove();salir();
+  mapa.removeFeatureState(MUN);
+  muns.forEach(m=>mapa.setFeatureState({...MUN,id:m.cvegeo},{c:color(valor(m))}));
+}
+
+// Encuadra el mapa en los municipios con actividades.
+async function encuadrar(){
+  await listo;
+  const ms=D.municipios;
+  if(!ms.length)return;
+  const b=ms.reduce((a,m)=>[Math.min(a[0],m.bbox[0]),Math.min(a[1],m.bbox[1]),Math.max(a[2],m.bbox[2]),Math.max(a[3],m.bbox[3])],[180,90,-180,-90]);
+  mapa.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:40,maxZoom:10,duration:600});
+}
+
+function pintar(j){
+  D=j; porId={};
+  j.municipios.forEach(m=>porId[m.cvegeo]=m);
+  if(CAPA!=='todas'&&!j.capas.some(c=>c.clave===CAPA))CAPA='todas';
+  const v=j.ventana;
+  $('periodo').textContent='Del '+v.desde_txt+' al '+v.hasta_txt+(j.proyecto?' · '+j.proyecto:'');
+  $('k-sin').textContent=num(j.sin_ubicar);
   $('p-sin').style.display=j.sin_ubicar?'':'none';
   $('sin').innerHTML=j.no_ubicados.map(x=>'<span class="chip">'+esc(x.nombre)+'<b>×'+x.n+'</b></span>').join('');
-
-  // Selector de proyecto con los que tienen actividades en el rango
   const sel=$('f-proy'), actual=j.proyecto||'';
   sel.innerHTML='<option value="">Todos</option>'+j.proyectos.map(p=>'<option value="'+esc(p.clave)+'">'+esc(p.clave)+' · '+esc((PROY[p.clave]||PROY.OTRO)[0])+' ('+p.n+')</option>').join('');
   sel.value=actual;
+  pintarCapas();pintarCapa();encuadrar();
 }
 
 async function cargar(){
@@ -325,6 +505,26 @@ async function cargar(){
     banner.style.display='block';banner.textContent='No se pudo conectar con el servidor.';$('periodo').textContent='—';console.error(err);
   }
 }
+
+// Mapa base, referencias y opacidad.
+document.querySelectorAll('input[name=base]').forEach(r=>r.addEventListener('change',()=>{
+  ['sat','topo','gris'].forEach(b=>mapa.setLayoutProperty(b,'visibility',b===r.value?'visible':'none'));
+}));
+const ver=(id,capas)=>$(id).addEventListener('change',e=>capas.forEach(c=>mapa.setLayoutProperty(c,'visibility',e.target.checked?'visible':'none')));
+ver('r-lugares',['ref']);ver('r-edos',['edo-linea']);ver('r-muns',['mun-linea']);
+$('r-opac').addEventListener('input',e=>{
+  const v=e.target.value/100;$('r-opac-v').textContent=e.target.value+'%';
+  mapa.setPaintProperty('mun-fill','fill-opacity',['case',['to-boolean',['feature-state','c']],v,0]);
+});
+
+// Manual: aparece al abrir; se cierra con el botón, con Esc o tocando fuera.
+const manual=$('manual');
+const cerrar=()=>{manual.classList.remove('abierto');$('b-manual').focus();};
+$('b-cerrar').addEventListener('click',cerrar);
+$('b-manual').addEventListener('click',()=>{manual.classList.add('abierto');$('b-cerrar').focus();});
+manual.addEventListener('click',e=>{if(e.target===manual)cerrar();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&manual.classList.contains('abierto'))cerrar();});
+$('b-cerrar').focus();
 
 $('b-ver').addEventListener('click',()=>{
   const a=$('f-desde').value,b=$('f-hasta').value;

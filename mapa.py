@@ -1,7 +1,8 @@
-"""Mapa de actividades por municipio de TRAXA.
+"""Geovisualizador de actividades.
 
 Pinta cada municipio según cuántas actividades tiene en el rango elegido, usando
 las columnas ESTADO y MUNICIPIO del Sheet y la capa INEGI que ya carga app.py.
+Cada categoría de Conteo es una capa (mismo criterio de clasificación).
 
 Se conecta desde app.py con:
     import mapa
@@ -76,28 +77,71 @@ def _buscar(estado, nombre):
     return candidatos[0] if len(candidatos) == 1 else None      # sin estado: solo si el nombre es único en el país
 
 
+# Nombre de estado normalizado si el texto es un estado («Estado de México» -> «mexico»); si no, "".
+def _como_estado(texto):
+    t = _norm(texto)
+    t = ALIAS_EDO.get(t, t)
+    return t if t in _indices()[2] else ""
+
+
 # Municipios (índices INEGI) a los que corresponde una fila; [] si no se pudo ubicar.
+# «Polotitlán, Estado de México; San Juan del Río y Pedro Escobedo, Querétaro»: cada grupo usa su propio estado.
 def ubicar(estado, municipio):
     e = _norm(estado)
     e = ALIAS_EDO.get(e, e)
     entero = _buscar(e, municipio)
     if entero is not None:
         return [entero]
-    partes = [p for p in re.split(r"\s*[,;/]\s*|\s+y\s+|\s+e\s+", str(municipio or "")) if p.strip()]
-    if len(partes) < 2:
-        return []
     hallados = []
-    for p in partes:
-        i = _buscar(e, p)
-        if i is not None and i not in hallados:
-            hallados.append(i)
+    for grupo in str(municipio or "").split(";"):
+        partes = [p for p in re.split(r"\s*[,/]\s*|\s+y\s+|\s+e\s+", grupo) if p.strip()]
+        edo_grupo = _como_estado(partes[-1]) if len(partes) >= 2 else ""
+        if edo_grupo:
+            partes = partes[:-1]                   # el último es el estado del grupo
+        for p in partes:
+            i = _buscar(edo_grupo or e, p)
+            if i is None and not edo_grupo:
+                i = _buscar("", p)                 # el ESTADO de la fila no cuadra: nombre único en el país
+            if i is not None and i not in hallados:
+                hallados.append(i)
     return hallados
+
+def _sin_numero(nombre):
+    return re.sub(r"^\d+\.\s*", "", nombre)
+
+
+# Capas del geovisualizador en el orden de Conteo: categorías, subcategorías de la 3 y sin clasificar.
+def _capas_base():
+    cats = sorted([n for n, _ in N.CATEGORIAS_CONTEO] + [N.CAT3_NOMBRE],
+                  key=lambda n: int(re.match(r"\d+", n).group()))
+    subs = [n for n, _ in N.CAT3_SUB] + [N.CAT3_GENERAL[0]]
+    capas = []
+    for n in cats:
+        capas.append({"clave": _sin_numero(n), "nombre": _sin_numero(n), "tipo": "categoria"})
+        if n == N.CAT3_NOMBRE:
+            capas += [{"clave": "sub|" + sn, "nombre": sn, "tipo": "sub"} for sn in subs]
+    capas.append({"clave": "sin", "nombre": "Sin clasificar", "tipo": "sin"})
+    return capas
+
+
+# Claves de capa de una actividad (mismo criterio que la pantalla de Conteo).
+def _capas_de(f):
+    hits = N.clasificar_actividad(f.get("TIPO DE SOLICITUD", ""), f.get("ACTIVIDADES DESARROLLADAS", ""))
+    if not hits:
+        return ["sin"]
+    claves = []
+    for cat, sub in hits:
+        claves.append(_sin_numero(cat))
+        if sub:
+            claves.append("sub|" + sub)
+    return claves
+
 
 # Lee el Sheet y arma el mapa para el rango (y proyecto) pedidos.
 def datos(desde, hasta, proyecto=""):
     inv = {v: k for k, v in N.mapa_proyectos.items()}
-    por_mun = defaultdict(lambda: {"n": 0, "proy": Counter(), "acts": []})
-    por_proy, no_ubicados = Counter(), Counter()
+    por_mun = defaultdict(lambda: {"n": 0, "proy": Counter(), "acts": [], "capas": Counter()})
+    por_proy, no_ubicados, por_capa = Counter(), Counter(), Counter()
     total = ubicadas = 0
 
     for f in N._filas_hoja_principal():
@@ -109,6 +153,8 @@ def datos(desde, hasta, proyecto=""):
         if proyecto and clave != proyecto:
             continue
         total += 1
+        capas = _capas_de(f)
+        por_capa.update(capas)
         estado, municipio = (f.get("ESTADO") or "").strip(), (f.get("MUNICIPIO") or "").strip()
         idxs = ubicar(estado, municipio)
         if not idxs:
@@ -120,19 +166,24 @@ def datos(desde, hasta, proyecto=""):
             m = por_mun[i]
             m["n"] += 1
             m["proy"][clave] += 1
-            m["acts"].append((d, _hora(f), clave, (f.get("TIPO DE SOLICITUD") or "").strip()))
+            m["capas"].update(capas)
+            m["acts"].append((d, _hora(f), clave, (f.get("TIPO DE SOLICITUD") or "").strip(), set(capas)))
 
     municipios = []
     for i, m in sorted(por_mun.items(), key=lambda kv: -kv[1]["n"]):
         p, g = N.MUN_PROPS[i], N.MUN_GEOMS[i]
-        recientes = sorted(m["acts"], key=lambda a: (a[0], a[1]), reverse=True)[:5]
+        ordenadas = sorted(m["acts"], key=lambda a: (a[0], a[1]), reverse=True)
+        fmt = lambda a: {"fecha": a[0].strftime("%d/%m/%Y"), "hora": a[1], "proyecto": a[2], "actividad": a[3]}
+        recientes = {"todas": [fmt(a) for a in ordenadas[:5]]}
+        for c in m["capas"]:                     # las 5 más recientes de cada capa
+            recientes[c] = [fmt(a) for a in ordenadas if c in a[4]][:5]
         punto = g.representative_point()
         municipios.append({
             "id": i, "cvegeo": p["CVEGEO"], "municipio": p["NOM_MUN"], "estado": p["NOM_ENT"], "n": m["n"],
             "bbox": [round(v, 5) for v in g.bounds], "punto": [round(punto.x, 5), round(punto.y, 5)],
             "proyectos": dict(m["proy"].most_common()),
-            "recientes": [{"fecha": a[0].strftime("%d/%m/%Y"), "hora": a[1], "proyecto": a[2],
-                           "actividad": a[3]} for a in recientes],
+            "capas": dict(m["capas"]),
+            "recientes": recientes,
         })
 
     return {
@@ -145,6 +196,7 @@ def datos(desde, hasta, proyecto=""):
         "sin_ubicar": total - ubicadas,
         "no_ubicados": [{"nombre": k, "n": v} for k, v in no_ubicados.most_common(12)],
         "proyectos": [{"clave": k, "n": v} for k, v in por_proy.most_common()],
+        "capas": [dict(c, n=por_capa.get(c["clave"], 0)) for c in _capas_base()],
         "municipios": municipios,
     }
 
@@ -154,7 +206,7 @@ def registrar(app, nucleo):
     global N
     N = nucleo
 
-    # Página del mapa.
+    # Página del geovisualizador.
     @app.route("/mapa")
     def mapa_pagina():
         return render_template("mapa.html")

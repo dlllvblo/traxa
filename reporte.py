@@ -86,6 +86,7 @@ def _lista(contador, tope=None):
 # Lee el Sheet y arma todos los números del reporte para el rango dado.
 def datos(desde, hasta):
     inv = {v: k for k, v in N.mapa_proyectos.items()}
+    import mapa                                    # aquí y no arriba: mapa.py importa de reporte.py
     proy, edo, dep, cat, prop, mun, por_dia, emp = (Counter() for _ in range(8))
     actividades, sin_fecha, sin_categoria = [], 0, 0
 
@@ -106,7 +107,11 @@ def datos(desde, hasta):
         if estado:
             edo[estado] += 1
         municipio = _titulo(f.get("MUNICIPIO"))
-        if municipio:
+        idxs = mapa.ubicar(f.get("ESTADO"), f.get("MUNICIPIO"))
+        for i in idxs:                             # la actividad suma en cada municipio donde se hizo
+            p = N.MUN_PROPS[i]
+            mun[f"{p['NOM_MUN']}, {p['NOM_ENT']}"] += 1
+        if municipio and not idxs:                 # no reconocido en INEGI: se queda como viene
             mun[f"{municipio}, {estado}" if estado else municipio] += 1
 
         celda = N._sin_acentos(str(f.get("DEPENDENCIAS PARTICIPANTES", "")).upper())
