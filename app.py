@@ -1607,12 +1607,13 @@ TELEGRAM_CHATS_OK = set(
 )
 _telegram_vistos = set()   # update_id ya procesados (anti-duplicados en frío de Render)
 _agendas_recientes = {}
+_encabezados = {}   # chat_id -> (hora, encabezado de su última agenda: proyecto y fecha)
 
 import threading
 
 _buffer_lock = threading.Lock()
 _mensajes_buffer = {}  # chat_id -> {"texto": str, "timer": Timer}
-BUFFER_DELAY = 4  # segundos de espera para juntar fragmentos partidos por Telegram
+BUFFER_DELAY = 10  # segundos de espera para juntar fragmentos partidos por Telegram
 
 # Envía un mensaje de Telegram (silencioso si falla).
 def telegram_enviar(chat_id, texto):
@@ -1696,6 +1697,15 @@ def _procesar_buffer(chat_id):
     # Preguntas y comandos. Tara responde y no lo trata como agenda.
     if tara_consultas.atender(chat_id, texto):
         return
+
+    # Continuación que llegó tarde y sin encabezado: se le pone el de la agenda anterior del chat.
+    if re.match(r"\s*\d{1,2}[.)]\s", texto) and not re.search(r"(?i)proyecto|agenda|fecha\s*:", texto[:300]):
+        previo = _encabezados.get(chat_id)
+        if previo and (datetime.now() - previo[0]).total_seconds() < 900:
+            texto = previo[1] + "\n\n" + texto
+    inicio = re.search(r"(?m)^\s*\d{1,2}[.)]\s", texto)
+    if inicio and inicio.start() > 0:
+        _encabezados[chat_id] = (datetime.now(), texto[:inicio.start()].strip())
 
     if not (re.search(r'(?i)agenda', texto)
             or "Fecha:" in texto
