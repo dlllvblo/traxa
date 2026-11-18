@@ -489,7 +489,8 @@ def redactar(q, acts):
     if q["intencion"] == "contar":
         texto = f"📊 {_plural(len(acts))}\n{cab}"
         if not q["proyectos"] and len({a['proyecto'] for a in acts}) > 1:
-            texto += f"\nPor proyecto: {_por_proyecto(acts)}"
+            conteo = Counter(a["proyecto"] for a in acts).most_common()
+            texto += "\nPor proyecto:\n" + "\n".join(f"• {k} = {v}" for k, v in conteo)
         return texto
 
     if q["intencion"] == "resumen":
@@ -554,6 +555,8 @@ def responder(texto, hoy=None, chat_id=None, natural=False):
     hist = _historial(chat_id)
     if _RE_CHARLA.fullmatch(_n(t)):
         return (natural and _natural(t, "", hist)) or _respaldo_charla(t)
+    if re.search(r"\bgrafic[ao]s?\b", _n(t)):
+        return _grafica(t, hoy, chat_id)
 
     filas = N._filas_hoja_principal()
     try:
@@ -589,8 +592,8 @@ def responder(texto, hoy=None, chat_id=None, natural=False):
         _ULTIMA[chat_id] = (time.time(), q)
     acts = filtrar(q, filas)
     base = redactar(q, acts)
-    if q["intencion"] in ("resumen", "listar"):
-        return base          # resumen y lista van completos y estructurados; Haiku no los reescribe
+    if q["intencion"] in ("resumen", "listar", "contar"):
+        return base          # van completos y estructurados; Haiku no los reescribe
     return (natural and _natural(t, _datos(q, acts, base), hist)) or base
 
 
@@ -712,10 +715,178 @@ def atender(chat_id, texto):
         print(traceback.format_exc(), flush=True)
         respuesta = "❌ No pude consultar el Sheet en este momento. Intenta de nuevo en un minuto."
     _recordar(chat_id, "Usuario", texto)
+    if isinstance(respuesta, dict):                     # gráfica: foto con pie de texto
+        _recordar(chat_id, "Tara", "[gráfica] " + respuesta["pie"])
+        if not _enviar_foto(chat_id, respuesta["png"], respuesta["pie"]):
+            N.telegram_enviar(chat_id, "No pude enviar la gráfica 😕 Intenta de nuevo en un momento.")
+        return True
     _recordar(chat_id, "Tara", respuesta)
     for parte in _partir(respuesta):
         N.telegram_enviar(chat_id, parte)
     return True
+
+
+# Colores oficiales para la gráfica.
+GUINDA, GUINDA_OSCURO, DORADO, GRIS = "#9F2241", "#691C32", "#BC955C", "#6F7271"
+
+
+# «Me puedes hacer una gráfica»: usa la pregunta anterior del chat, o la del mismo mensaje
+# si trae periodo o filtros («gráfica de octubre por proyecto»).
+def _grafica(texto, hoy, chat_id):
+    filas = N._filas_hoja_principal()
+    n = _n(texto)
+    try:
+        q = interpretar(texto, filas, hoy)
+    except FechaInvalida:
+        return "Esa fecha no existe 🤔 Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
+    propia = q["con_periodo"] or q["proyectos"] or q["estado"] or q["municipio"] or q["categorias"] or q["dependencias"]
+    if not propia:
+        previa = _ULTIMA.get(chat_id)
+        if not previa or time.time() - previa[0] > HIST_MINUTOS * 60:
+            return ("¿De qué quieres la gráfica? 📊 Pregúntame primero algo como «¿cuántas reuniones con RAN "
+                    "en octubre?» y luego pídeme la gráfica, o dímelo junto: «gráfica de octubre por proyecto».")
+        q = previa[1]
+    acts = filtrar(q, filas)
+    if not acts:
+        return "No hay actividades con esos filtros, así que no hay nada que graficar."
+
+    # Qué se cuenta: lo que pida el mensaje o, si no dice, por proyecto.
+    if re.search(r"\bpor (dia|dias|fecha|fechas)\b|\bdiari[ao]\b", n):
+        eje, conteo = "día", Counter(a["fecha"].strftime("%d/%m") for a in acts)
+        conteo = sorted(conteo.items(), key=lambda x: (x[0][3:], x[0][:2]))
+    elif re.search(r"\bpor (tipo|tipos|categoria|categorias|actividad|actividades)\b", n):
+        eje, conteo = "tipo de actividad", Counter(_corto(c) for a in acts for c in a["cats"]).most_common()
+    elif re.search(r"\bpor (estado|estados)\b", n):
+        eje, conteo = "estado", Counter(_titulo(a["estado"]) or "Sin ubicación" for a in acts).most_common()
+    else:
+        eje, conteo = "proyecto", Counter(a["proyecto"] for a in acts).most_common()
+        if len(conteo) == 1:                             # un solo proyecto: mejor por tipo
+            eje, conteo = "tipo de actividad", Counter(_corto(c) for a in acts for c in a["cats"]).most_common()
+    if not conteo:
+        return "No encontré datos para armar esa gráfica."
+
+    filtros = _encabezado(q).split("\n")[1:]           # «Filtros: …», si hay
+    titulo = f"Actividades por {eje}"
+    periodo = _etiqueta_periodo(q["desde"], q["hasta"])
+    try:
+        png = _dibujar(conteo, titulo, periodo + (" · " + filtros[0].replace("Filtros: ", "") if filtros else ""),
+                       eje == "día")
+    except ImportError:
+        return "No puedo hacer gráficas todavía: falta instalar matplotlib en el servidor."
+    pie = f"📊 {titulo}\nPeriodo: {periodo}" + ("\n" + filtros[0] if filtros else "") + f"\nTotal: {_plural(len(acts))}"
+    return {"png": png, "pie": pie}
+
+
+# Tipografías oficiales: se buscan en static/fonts; si no están, se bajan una vez a /tmp.
+FUENTES = {
+    "Patria_Regular.otf": "https://framework-gb.cdn.gob.mx/applications/cms/fonts/Patria_Regular.otf",
+    "Patria_Bold.otf": "https://framework-gb.cdn.gob.mx/applications/cms/fonts/Patria_Bold.otf",
+    "NotoSans-Regular.ttf": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSans/hinted/ttf/NotoSans-Regular.ttf",
+    "NotoSans-Bold.ttf": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSans/hinted/ttf/NotoSans-Bold.ttf",
+}
+_familias = None
+
+
+# Registra las fuentes en matplotlib y devuelve (familia de títulos, familia de texto).
+def _fuentes():
+    global _familias
+    if _familias:
+        return _familias
+    from matplotlib import font_manager
+    carpetas = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts"), "/tmp/traxa_fuentes"]
+    nombres = {}
+    for archivo, url in FUENTES.items():
+        ruta = next((os.path.join(c, archivo) for c in carpetas if os.path.exists(os.path.join(c, archivo))), None)
+        if not ruta:
+            try:
+                r = requests.get(url, timeout=15)
+                r.raise_for_status()
+                os.makedirs(carpetas[1], exist_ok=True)
+                ruta = os.path.join(carpetas[1], archivo)
+                with open(ruta, "wb") as f:
+                    f.write(r.content)
+            except Exception as e:
+                print(f"[tara] no pude bajar {archivo}: {e}", flush=True)
+                continue
+        try:
+            font_manager.fontManager.addfont(ruta)
+            nombres[archivo.split("_")[0].split("-")[0]] = font_manager.FontProperties(fname=ruta).get_name()
+        except Exception as e:
+            print(f"[tara] fuente inválida {archivo}: {e}", flush=True)
+    texto = nombres.get("NotoSans", "DejaVu Sans")
+    _familias = (nombres.get("Patria", texto), texto)
+    return _familias
+
+
+# Dibuja barras (horizontales por categoría, verticales por día) y regresa el PNG en bytes.
+def _dibujar(conteo, titulo, subtitulo, por_dia):
+    import io
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    f_titulo, f_texto = _fuentes()
+    plt.rcParams["font.family"] = f_texto
+    etiquetas = [str(k) for k, _ in conteo]
+    valores = [v for _, v in conteo]
+    tope = max(valores)
+
+    if por_dia:
+        fig, ax = plt.subplots(figsize=(min(10, max(6.5, len(valores) * 0.35)), 5), dpi=160)
+        barras = ax.bar(etiquetas, valores, color=GUINDA, width=0.7, zorder=3)
+        ax.tick_params(axis="x", rotation=60, labelsize=8, length=0)
+        for b, v in zip(barras, valores):
+            ax.annotate(str(v), (b.get_x() + b.get_width() / 2, v), ha="center", va="bottom", fontsize=8,
+                        color=GUINDA_OSCURO, fontweight="bold", xytext=(0, 2), textcoords="offset points")
+        ax.set_ylim(0, tope * 1.15)
+        ax.yaxis.grid(True, color="#E6E1D8", linewidth=0.8, zorder=0)
+        ax.tick_params(axis="y", labelsize=8, length=0, colors=GRIS)
+        ax.spines["left"].set_visible(False)
+    else:
+        etiquetas, valores = etiquetas[::-1], valores[::-1]          # el mayor arriba
+        fig, ax = plt.subplots(figsize=(7.5, max(3.2, len(valores) * 0.5 + 1.6)), dpi=160)
+        colores = [GUINDA if v == tope else DORADO for v in valores]
+        barras = ax.barh(etiquetas, valores, color=colores, height=0.68, zorder=3)
+        for b, v in zip(barras, valores):
+            ax.annotate(f"{v:,}", (v, b.get_y() + b.get_height() / 2), va="center", fontsize=10,
+                        color=GUINDA_OSCURO, fontweight="bold", xytext=(5, 0), textcoords="offset points")
+        ax.set_xlim(0, tope * 1.15)
+        ax.xaxis.grid(True, color="#E6E1D8", linewidth=0.8, zorder=0)
+        ax.tick_params(axis="y", labelsize=10, length=0, colors="#2B2B2B")
+        ax.tick_params(axis="x", labelsize=8, length=0, colors=GRIS)
+        ax.spines["left"].set_color(GRIS)
+        ax.spines["bottom"].set_visible(False)
+
+    for lado in ("top", "right"):
+        ax.spines[lado].set_visible(False)
+    ax.spines["bottom"].set_color(GRIS)
+
+    # Encabezado: título en Patria, línea dorada y subtítulo en Noto Sans.
+    fig.tight_layout(rect=(0, 0.03, 1, 0.84))
+    fig.text(0.02, 0.95, titulo, fontsize=16, fontweight="bold", color=GUINDA_OSCURO,
+             family=f_titulo, va="top")
+    fig.add_artist(plt.Line2D([0.02, 0.98], [0.885, 0.885], color=DORADO, linewidth=1.6))
+    fig.text(0.02, 0.865, subtitulo, fontsize=9.5, color=GRIS, va="top")
+    fig.text(0.98, 0.012, "TRAXA · Proyecto Ferroviario", ha="right", fontsize=7, color=GRIS)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
+
+
+# Envía una imagen a Telegram con su pie de texto. True si salió bien.
+def _enviar_foto(chat_id, png, pie):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        return False
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
+                          data={"chat_id": chat_id, "caption": pie[:1000]},
+                          files={"photo": ("grafica.png", png, "image/png")}, timeout=30)
+        return r.ok
+    except requests.RequestException:
+        return False
 
 
 # Telegram no acepta mensajes de más de 4096 caracteres: se parten por renglón.

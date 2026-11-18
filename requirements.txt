@@ -6,3 +6,4 @@ gunicorn
 requests 
 shapely
 python-docx
+matplotlib

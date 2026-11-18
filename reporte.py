@@ -336,7 +336,7 @@ def _word(d):
               [(a["fecha"], a["hora"], a["proyecto"], a["municipio"], a["actividad"])
                for a in d["actividades"]], [2.2, 1.4, 1.6, 3.3, 8])
 
-    parrafo(f"Registro Agrario Nacional · Dirección General Territorial — Generado el {d['generado']}",
+    parrafo(f"Registro Agrario Nacional · Dirección de Gestión Territorial — Generado el {d['generado']}",
             8, color=GRIS, centro=True).paragraph_format.space_before = Pt(14)
 
     salida = io.BytesIO()
