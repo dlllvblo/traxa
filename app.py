@@ -1667,8 +1667,14 @@ def telegram_webhook():
             # Telegram parte mensajes SOLO cuando pasan de ~4096 chars. Si el buffer
             # previo es corto, este fragmento es un mensaje NUEVO (ej. el adicional del
             # Frente 4) -> sepáralo con renglón en blanco. Si ya viene largo, es una
-            # continuación partida por Telegram -> pégala sin separador.
-            sep = "\n\n" if len(entry["texto"]) < 3000 else ""
+            # continuación partida por Telegram, que se come el salto de renglón del corte:
+            # se repone según cómo empieza el fragmento.
+            if len(entry["texto"]) < 3000 or re.match(r"\s*\d{1,2}[.)]\s", texto):
+                sep = "\n\n"   # mensaje nuevo, o el corte cayó justo antes de una actividad numerada
+            elif re.match(r"\s*[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ ]{1,30}:", texto):
+                sep = "\n"      # el corte cayó antes de un campo («Asistentes:», «Ubicación:»…)
+            else:
+                sep = " "       # el corte cayó a media línea
             entry["texto"] += sep + texto
         else:
             entry = {"texto": texto}
