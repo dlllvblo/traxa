@@ -315,7 +315,7 @@ def _es_url_maps(url):
     return any(d in url for d in ("goo.gl", "google.com", "share.google"))
 
 # Llama a Haiku y devuelve su texto; None si falla (el error queda en el log).
-def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta):
+def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta, timeout=8):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print(f"[haiku {etiqueta}] Falta ANTHROPIC_API_KEY; se usa el texto base.", flush=True)
@@ -334,7 +334,7 @@ def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta):
                 "system": system,
                 "messages": [{"role": "user", "content": mensaje}],
             },
-            timeout=8,
+            timeout=timeout,
         )
         resp.raise_for_status()
         return resp.json()["content"][0]["text"].strip()
