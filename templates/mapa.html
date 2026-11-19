@@ -109,7 +109,7 @@
 
   /* Leyenda y globo del mapa */
   .leyenda{position:absolute;left:10px;bottom:28px;z-index:2;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2;max-width:230px}
-  .leyenda b{display:block;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-strong);margin-bottom:6px}
+  .leyenda b{display:block;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-strong);margin-bottom:6px;line-height:1.35;overflow-wrap:anywhere}
   .leyenda div{display:flex;align-items:center;gap:7px;margin-top:3px;font-variant-numeric:tabular-nums}
   .leyenda i{width:16px;height:11px;border-radius:2px;border:1px solid rgba(110,21,46,.35);flex:0 0 auto}
   .maplibregl-popup-content{font-family:'Noto Sans',sans-serif;font-size:.76rem;color:var(--text);padding:12px 14px;min-width:220px;border-radius:9px;max-height:360px;overflow-y:auto}
@@ -185,7 +185,7 @@
       <label>Proyecto <select id="f-proy"><option value="">Todos</option></select></label>
       <button class="btn fuerte" id="b-ver">Ver</button>
     </div>
-    <button class="btn" id="b-manual" aria-label="Abrir el manual">? Manual</button>
+    <button class="btn" id="b-manual" aria-label="Abrir el manual">Instructivo</button>
     <a class="btn" href="/dashboard">Volver al tablero</a>
   </div>
 
@@ -206,10 +206,10 @@
             <label><input type="radio" name="base" value="gris">Gris</label>
           </div>
           <div class="sub-t">Referencias</div>
-          <label class="chk"><input type="checkbox" id="r-lugares" checked> Nombres de lugares</label>
-          <label class="chk"><input type="checkbox" id="r-edos" checked> Límites estatales</label>
-          <label class="chk"><input type="checkbox" id="r-muns" checked> Límites municipales</label>
-          <div class="sub-t">Opacidad de la capa temática</div>
+          <label class="chk"><input type="checkbox" id="r-lugares" checked> Lugares</label>
+          <label class="chk"><input type="checkbox" id="r-edos" checked> Límites Estatales</label>
+          <label class="chk"><input type="checkbox" id="r-muns" checked> Límites Municipales</label>
+          <div class="sub-t">Transparencia de la capa activa</div>
           <div class="rango"><input type="range" id="r-opac" min="20" max="100" value="65" aria-label="Opacidad"><span id="r-opac-v">65%</span></div>
         </div>
       </div>
@@ -251,30 +251,30 @@
       <div class="cab"><b id="manual-t">Geovisualizador TRAXA</b><span>Manual de uso</span></div>
       <div class="cuerpo">
         <h3><em>1</em>¿Qué muestra?</h3>
-        <p>Las actividades registradas en la agenda (el mismo Sheet del tablero y del conteo), ubicadas en el municipio donde se realizaron. Cada municipio se colorea según cuántas actividades tuvo en el periodo: más oscuro, más actividades.</p>
+        <p>Las actividades registradas en la agenda, ubicadas en el municipio donde se realizaron. Cada municipio se colorea de acuerdo con las actividades en el periodo: más oscuro, más actividades.</p>
 
         <h3><em>2</em>Capas temáticas</h3>
         <ul>
-          <li><b>Todas las actividades</b>: el total por municipio.</li>
-          <li><b>Una capa por categoría</b>, las mismas de la pantalla de Conteo (Reuniones, Caminamientos, Levantamientos, Firmas, etc.). Al elegir una, el mapa muestra solo los municipios con esa categoría.</li>
-          <li><b>Subcapas de Levantamientos</b>: BDTs Construcción, BDTs Agroforestal y Topográficos/Mediciones.</li>
-          <li><b>Sin clasificar</b>: actividades que no entraron en ninguna categoría; sirve para revisar y mejorar la clasificación.</li>
-          <li>El número junto a cada capa es su total en el periodo y coincide con el Conteo. Las capas en gris no tienen actividades en el periodo.</li>
+          <li><b>Todas las actividades</b>: Total por municipio.</li>
+          <li><b>Capa por categoría</b>: Las mismas de la pantalla de Conteo. Al elegir una, el mapa muestra solo los municipios con esa categoría.</li>
+          <li><b>Subcapas</b>: BDTs Construcción y Agroforestal, y, Topográficos/Mediciones.</li>
+          <li><b>Sin clasificar</b>: Son aquellas actividades que no entraron en ninguna categoría.</li>
+          <li>El número junto a cada capa es su total en el periodo y coincide con el conteo. Las capas en gris no tienen actividades en el periodo.</li>
           <li>Se ve una capa a la vez; cada una tiene su propio color.</li>
         </ul>
 
         <h3><em>3</em>Filtros</h3>
         <ul>
-          <li><b>Desde / Hasta</b>: el periodo a consultar. Al abrir, va del 1 de enero a hoy.</li>
-          <li><b>Proyecto</b>: limita el mapa a un tramo ferroviario. Muestra entre paréntesis cuántas actividades tiene cada uno en el periodo.</li>
-          <li>Presiona <b>Ver</b> para aplicar las fechas. El proyecto se aplica al elegirlo.</li>
+          <li><b>Desde / Hasta</b>: Periodo a consultar. Al abrir, Se establece del primero de enero a hoy.</li>
+          <li><b>Proyecto</b>: Limita el mapa a un tramo ferroviario. Muestra entre paréntesis cuántas actividades tiene cada uno en el periodo.</li>
+          <li>Al presionar <b>Ver</b> el proyecto se aplica en las fechas solicitadas.</li>
         </ul>
 
         <h3><em>4</em>Mapa base y referencias</h3>
         <ul>
           <li><b>Satélite</b>, <b>Topográfico</b> o <b>Gris</b> como fondo.</li>
           <li>Puedes ocultar los nombres de lugares y los límites estatales o municipales (INEGI, Marco Geoestadístico 2025).</li>
-          <li><b>Opacidad</b>: hace más o menos transparente el color de los municipios para ver el fondo.</li>
+          <li><b>Opacidad</b>: Es la transparencia del color de los municipios para ver el fondo.</li>
         </ul>
 
         <h3><em>5</em>Leyenda</h3>
@@ -283,19 +283,19 @@
         <h3><em>6</em>Consultar un municipio</h3>
         <ul>
           <li><b>Pasa el cursor</b> sobre un municipio coloreado para ver su nombre y su número en la capa.</li>
-          <li><b>Toca o da clic</b> para abrir su ficha: total, actividades por proyecto, desglose por categoría y las 5 actividades más recientes de la capa activa.</li>
+          <li><b>Da clic</b> para abrir su ficha técnica.</li>
           <li>En <b>Municipios con más actividades</b>, toca uno para ir a él en el mapa.</li>
-          <li>Usa <b>+ / −</b>, la rueda del mouse o los dedos para acercar y alejar, y el botón de pantalla completa.</li>
+          <li>Usa <b>la rueda del ratón</b>, para acercar y alejar.</li>
         </ul>
 
         <h3><em>7</em>Para leer bien los números</h3>
         <ul>
-          <li>Una actividad puede contar en más de una categoría (por ejemplo, una reunión con firma), igual que en el Conteo; por eso la suma de las capas puede ser mayor que el total.</li>
+          <li>Una actividad puede contar en más de una categoría (por ejemplo, una reunión con firma), igual que en el conteo; por eso la suma de las capas puede ser mayor que el total.</li>
           <li>Si una actividad se registró en varios municipios, cuenta en cada uno.</li>
-          <li><b>Sin ubicar</b> son actividades que no se pudieron colocar en el mapa porque el Sheet no trae un municipio reconocible; se listan en el panel de la derecha para corregirlas.</li>
+          <li><b>Sin ubicar</b> son actividades que no se pudieron colocar en el mapa porque el Sheet no contiene un municipio reconocible; se listan en el panel de la derecha para corregirlas.</li>
         </ul>
       </div>
-      <div class="pie"><button class="btn fuerte" id="b-cerrar">Entendido, ir al mapa</button></div>
+      <div class="pie"><button class="btn fuerte" id="b-cerrar">Entendido, seguir explorando</button></div>
     </div>
   </div>
 
@@ -425,6 +425,9 @@ $('capas').addEventListener('change',e=>{
   if(innerWidth<=980)document.querySelector('.mapa-wrap').scrollIntoView({behavior:'smooth',block:'start'});  // en teléfono, lleva al mapa
 });
 
+// Título de la leyenda: puede partirse después de cada «/».
+const tituloLey=t=>esc(t).replace(/\//g,'/<wbr>');
+
 // Colorea el mapa y arma leyenda, resumen y lista para la capa activa.
 async function pintarCapa(){
   const muns=D.municipios.filter(m=>valor(m)>0).sort((a,b)=>valor(b)-valor(a));
@@ -437,10 +440,10 @@ async function pintarCapa(){
   $('k-mun').textContent=num(muns.length);
 
   const ley=$('leyenda');
-  if(!cortes.length){ley.innerHTML='<b>'+esc(nombreCapa(CAPA))+'</b><div>Sin actividades en el periodo</div>';}
+  if(!cortes.length){ley.innerHTML='<b>'+tituloLey(nombreCapa(CAPA))+'</b><div>Sin actividades en el periodo</div>';}
   else{
     let ini=1;
-    ley.innerHTML='<b>'+esc(nombreCapa(CAPA))+'</b>'+cortes.map(c=>{
+    ley.innerHTML='<b>'+tituloLey(nombreCapa(CAPA))+'</b>'+cortes.map(c=>{
       const txt=ini>=c?num(c):num(ini)+' – '+num(c); const h='<div><i style="background:'+color(c)+'"></i>'+txt+'</div>'; ini=c+1; return h;
     }).join('');
   }
