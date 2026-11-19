@@ -44,7 +44,7 @@
   .banner{display:none;background:rgba(162,30,66,.10);border:1px solid var(--guinda);color:var(--guinda-deep);padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:.8rem}
 
   /* Lienzo: capas | mapa | resumen */
-  .lienzo{display:grid;grid-template-columns:290px minmax(0,1fr) 320px;gap:16px;align-items:start}
+  .lienzo{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
   .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
   .col{display:flex;flex-direction:column;gap:16px;min-width:0}
   .col .panel{padding:16px 18px}
@@ -52,8 +52,26 @@
   .mapa-wrap{position:relative}
   #mapa{height:calc(100vh - 150px);min-height:520px;background:#1d2b33;z-index:0}
 
+  /* Panel dentro del mapa: barra de íconos y panel que se abre y se cierra */
+  .riel{position:absolute;left:10px;top:10px;z-index:3;display:flex;flex-direction:column;gap:6px}
+  .riel button{width:40px;height:40px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.96);color:var(--text-strong);
+    display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 12px -6px rgba(0,0,0,.45)}
+  .riel button svg{width:20px;height:20px}
+  .riel button:hover{background:#fff}
+  .riel button[aria-expanded=true]{background:#a42145;color:#fff;border-color:#a42145}
+  .riel button:focus-visible{outline:2px solid var(--guinda);outline-offset:2px}
+  .dock{position:absolute;left:58px;top:10px;z-index:3;width:300px;max-height:calc(100% - 20px);display:none;flex-direction:column;
+    background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 30px -12px rgba(0,0,0,.5);overflow:hidden}
+  .dock.abierto{display:flex}
+  .dock .dock-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px 8px}
+  .dock .dock-cab h2{margin:0}
+  .dock .cerrar{border:0;background:none;font-size:1.3rem;line-height:1;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px}
+  .dock .cerrar:hover{background:var(--board);color:var(--text-strong)}
+  .dock .dock-cuerpo{overflow-y:auto;padding:0 14px 14px}
+  .dock .vista{display:none}.dock .vista.activa{display:block}
+
   /* Capas temáticas */
-  .capas{display:flex;flex-direction:column;gap:2px;max-height:calc(100vh - 470px);min-height:260px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+  .capas{display:flex;flex-direction:column;gap:2px;margin:0 -6px;padding:0 6px}
   .capa{position:relative;display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:.74rem;line-height:1.25;border:1px solid transparent}
   .capa:hover{background:var(--board)}
   .capa input{position:absolute;opacity:0;pointer-events:none}
@@ -108,7 +126,7 @@
   footer .mono{font-family:'Noto Sans',sans-serif;color:var(--muted)}
 
   /* Leyenda y globo del mapa */
-  .leyenda{position:absolute;left:10px;bottom:28px;z-index:2;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2;max-width:230px}
+  .leyenda{position:absolute;right:10px;bottom:52px;z-index:2;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:'Noto Sans',sans-serif;font-size:.68rem;color:var(--text);line-height:1.2;max-width:230px}
   .leyenda b{display:block;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-strong);margin-bottom:6px;line-height:1.35;overflow-wrap:anywhere}
   .leyenda div{display:flex;align-items:center;gap:7px;margin-top:3px;font-variant-numeric:tabular-nums}
   .leyenda i{width:16px;height:11px;border-radius:2px;border:1px solid rgba(110,21,46,.35);flex:0 0 auto}
@@ -142,14 +160,11 @@
   .manual .pie{padding:14px 22px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:10px;background:var(--panel-2)}
 
   @media (max-width:1280px){
-    .lienzo{grid-template-columns:280px minmax(0,1fr)}
-    .col.der{grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+    .lienzo{grid-template-columns:1fr}
+    .col.der{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
   }
   @media (max-width:980px){
-    .lienzo{grid-template-columns:1fr}
-    .col.izq{order:2}.mapa-wrap{order:1}.col.der{order:3}
     #mapa{height:62vh;min-height:380px}
-    .capas{max-height:none}
   }
   @media (max-width:560px){
     body{padding:12px}
@@ -161,7 +176,8 @@
     .filtro .btn{grid-column:1 / -1;justify-content:center}
     .topbar>.btn{flex:1 1 40%;justify-content:center}
     #mapa{height:58vh;min-height:340px}
-    .leyenda{top:10px;right:10px;left:auto;bottom:auto;padding:7px 9px;font-size:.62rem;max-width:170px}
+    .leyenda{right:8px;bottom:46px;padding:7px 9px;font-size:.62rem;max-width:150px}
+    .dock{left:56px;width:calc(100% - 66px);max-height:calc(100% - 20px)}
     .leyenda b{font-size:.52rem;margin-bottom:4px}
     .manual{padding:8px}.manual .cuerpo{padding:14px 16px}
   }
@@ -190,31 +206,41 @@
   <div class="banner" id="banner"></div>
 
   <div class="lienzo">
-    <div class="col izq">
-      <div class="panel">
-        <h2>Capas temáticas</h2>
-        <div class="capas" id="capas" role="radiogroup" aria-label="Capas temáticas"></div>
-      </div>
-      <div class="panel">
-        <h2>Mapa base</h2>
-        <div class="opciones">
-          <div class="seg" role="radiogroup" aria-label="Mapa base">
-            <label><input type="radio" name="base" value="sat" checked>Satélite</label>
-            <label><input type="radio" name="base" value="topo">Topográfico</label>
-            <label><input type="radio" name="base" value="gris">Gris</label>
-          </div>
-          <div class="sub-t">Referencias</div>
-          <label class="chk"><input type="checkbox" id="r-lugares" checked> Lugares</label>
-          <label class="chk"><input type="checkbox" id="r-edos" checked> Límites Estatales</label>
-          <label class="chk"><input type="checkbox" id="r-muns" checked> Límites Municipales</label>
-          <div class="sub-t">Transparencia de la capa activa</div>
-          <div class="rango"><input type="range" id="r-opac" min="20" max="100" value="65" aria-label="Opacidad"><span id="r-opac-v">65%</span></div>
-        </div>
-      </div>
-    </div>
-
     <div class="panel mapa-wrap"><div id="mapa" role="application" aria-label="Geovisualizador de actividades por municipio"></div>
-      <div class="leyenda" id="leyenda"></div></div>
+      <div class="leyenda" id="leyenda"></div>
+
+      <!-- Barra de íconos: abre y cierra el panel sobre el mapa -->
+      <div class="riel">
+        <button type="button" data-vista="v-capas" aria-expanded="true" aria-controls="dock" title="Capas temáticas" aria-label="Capas temáticas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 18 10 5 10-5" opacity=".55"/></svg>
+        </button>
+        <button type="button" data-vista="v-base" aria-expanded="false" aria-controls="dock" title="Mapa base" aria-label="Mapa base">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>
+        </button>
+      </div>
+      <div class="dock abierto" id="dock">
+        <div class="dock-cab"><h2 id="dock-t">Capas temáticas</h2><button type="button" class="cerrar" id="dock-cerrar" aria-label="Cerrar panel">&times;</button></div>
+        <div class="dock-cuerpo">
+          <div class="vista activa" id="v-capas">
+            <div class="capas" id="capas" role="radiogroup" aria-label="Capas temáticas"></div>
+          </div>
+          <div class="vista" id="v-base">
+            <div class="opciones">
+              <div class="seg" role="radiogroup" aria-label="Mapa base">
+                <label><input type="radio" name="base" value="sat" checked>Satélite</label>
+                <label><input type="radio" name="base" value="topo">Topográfico</label>
+                <label><input type="radio" name="base" value="gris">Gris</label>
+              </div>
+              <div class="sub-t">Referencias</div>
+              <label class="chk"><input type="checkbox" id="r-lugares" checked> Lugares</label>
+              <label class="chk"><input type="checkbox" id="r-edos" checked> Límites Estatales</label>
+              <label class="chk"><input type="checkbox" id="r-muns" checked> Límites Municipales</label>
+              <div class="sub-t">Transparencia de la capa activa</div>
+              <div class="rango"><input type="range" id="r-opac" min="20" max="100" value="65" aria-label="Opacidad"><span id="r-opac-v">65%</span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
 
     <div class="col der">
       <div class="panel">
@@ -257,8 +283,9 @@
           <li><b>Capa por categoría</b>: Las mismas de la pantalla de Conteo. Al elegir una, el mapa muestra solo los municipios con esa categoría.</li>
           <li><b>Subcapas</b>: BDTs Construcción y Agroforestal, y, Topográficos/Mediciones.</li>
           <li><b>Sin clasificar</b>: Son aquellas actividades que no entraron en ninguna categoría.</li>
-          <li>El número junto a cada capa es su total en el periodo y coincide con el conteo. Las capas en gris no tienen actividades en el periodo.</li>
+          <li>El número junto a cada capa es su total en el periodo y coincide con el conteo. Las capas en gris no contienen actividades en el periodo.</li>
           <li>Se ve una capa a la vez; cada una tiene su propio color.</li>
+          <li>Las capas y el mapa base están en el panel sobre el mapa.</li>
         </ul>
 
         <h3><em>3</em>Filtros</h3>
@@ -276,7 +303,7 @@
         </ul>
 
         <h3><em>5</em>Leyenda</h3>
-        <p>Abajo a la izquierda del mapa (arriba a la derecha en el teléfono). Indica la capa activa y los rangos de cada tono. Los rangos se recalculan con los datos de cada capa y periodo.</p>
+        <p>Abajo a la derecha del mapa. Indica la capa activa y los rangos de cada tono. Los rangos se recalculan con los datos de cada capa y periodo.</p>
 
         <h3><em>6</em>Consultar un municipio</h3>
         <ul>
@@ -352,8 +379,8 @@ const mapa=new maplibregl.Map({
       {id:'ref',type:'raster',source:'ref'}
     ]}
 });
-mapa.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-left');
-mapa.addControl(new maplibregl.FullscreenControl(),'top-left');
+mapa.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+mapa.addControl(new maplibregl.FullscreenControl(),'top-right');
 mapa.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
 const listo=new Promise(r=>{
   const ok=()=>{if(!mapa.getSource('lim'))return false;r();return true;};
@@ -420,7 +447,7 @@ function pintarCapas(){
 $('capas').addEventListener('change',e=>{
   if(e.target.name!=='capa')return;
   CAPA=e.target.value;pintarCapa();
-  if(innerWidth<=980)document.querySelector('.mapa-wrap').scrollIntoView({behavior:'smooth',block:'start'});  // en teléfono, lleva al mapa
+  if(innerWidth<=560)abrirVista(null);  // en teléfono, cierra el panel para ver el mapa
 });
 
 // Título de la leyenda: puede partirse después de cada «/».
@@ -517,6 +544,18 @@ $('r-opac').addEventListener('input',e=>{
   const v=e.target.value/100;$('r-opac-v').textContent=e.target.value+'%';
   mapa.setPaintProperty('mun-fill','fill-opacity',['case',['to-boolean',['feature-state','c']],v,0]);
 });
+
+// Panel sobre el mapa: cada ícono abre su vista; el mismo ícono o la × lo cierran.
+const dock=$('dock'), botones=document.querySelectorAll('.riel button');
+function abrirVista(id){
+  dock.classList.toggle('abierto',!!id);
+  botones.forEach(b=>b.setAttribute('aria-expanded',String(b.dataset.vista===id)));
+  document.querySelectorAll('.dock .vista').forEach(v=>v.classList.toggle('activa',v.id===id));
+  if(id)$('dock-t').textContent=document.querySelector('.riel [data-vista="'+id+'"]').title;
+}
+botones.forEach(b=>b.addEventListener('click',()=>abrirVista(b.getAttribute('aria-expanded')==='true'?null:b.dataset.vista)));
+$('dock-cerrar').addEventListener('click',()=>abrirVista(null));
+if(innerWidth<=560)abrirVista(null);  // en teléfono empieza cerrado
 
 // Manual: aparece al abrir; se cierra con el botón, con Esc o tocando fuera.
 const manual=$('manual');
