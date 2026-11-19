@@ -45,7 +45,7 @@
   .brand .logo{width:42px;height:42px;border-radius:10px;flex:0 0 auto;
     background:linear-gradient(135deg,var(--guinda),var(--guinda-deep));
     display:grid;place-items:center;box-shadow:0 4px 12px -4px rgba(110,21,46,.4),inset 0 1px 0 rgba(255,255,255,.18)}
-  .brand .logo svg{width:23px;height:23px}
+  .brand .logo svg,.brand .logo img{width:23px;height:23px}
   .brand h1{font-family:'Patria','Noto Sans',sans-serif;font-size:1.12rem;font-weight:700;letter-spacing:.04em;line-height:1;color:var(--text-strong)}
   .brand .sub{font-size:.61rem;letter-spacing:.32em;color:var(--dorado);text-transform:uppercase;margin-top:5px;font-weight:600}
   .topbar .spacer{flex:1 1 40px}
@@ -118,9 +118,7 @@
   <div class="topbar">
     <div class="brand">
       <div class="logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 21h18"/><path d="M5 21V9l7-6 7 6v12"/><path d="M9 21v-6h6v6"/>
-        </svg>
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
       </div>
       <div><h1>Tipo de Propiedad</h1><div class="sub">Distribución General</div></div>
     </div>
