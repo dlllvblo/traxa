@@ -678,9 +678,9 @@ CATEGORIAS_CONTEO = [
      [r'mesas?\s+(?:de\s+atencion|social(?:es)?)', r'videoconferencias?',
       r'convocatorias?', r'conciliaci(?:on|ones)']),
     ("13. Censos/Reubicaciones",
-     [r'censos?', r'reubicaci(?:on|ones)']),
+     [r'censos?', r'reubicaci(?:on|ones)', r'cis', r'cedulas?\s+de\s+informacion']),
     ("14. Presentaciones/Entregas",
-     [r'presentaci(?:on|ones)', r'entregas?\s+de', r'recepci(?:on|ones)',
+     [r'presentaci(?:on|ones)', r'entregas?', r'recepci(?:on|ones)',
       r'notificaci(?:on|ones)']),
 ]
 
@@ -715,6 +715,14 @@ def clasificar_actividad(tipo_solicitud, detalle=""):
 
     if es_cat3 and re.search(r'(?<!\w)firmas?(?!\w)', txt) \
        and not re.search(r'(?<!\w)(?:medici(?:on|ones)|levantamientos?|topografic)', txt):
+        es_cat3 = False
+    # Entregar convenios o revisar fichas de BDT no es levantamiento
+    if es_cat3 and re.search(r'(?<!\w)(?:entregas?|convenios?|fichas?|revisar)(?!\w)', txt) \
+       and not re.search(r'(?<!\w)(?:medici(?:on|ones)|levantamientos?|topografic)', txt):
+        es_cat3 = False
+    # Levantar CIS (cédulas socioeconómicas) es censo, no levantamiento topográfico
+    if es_cat3 and re.search(r'(?<!\w)(?:cis|cedulas?)(?!\w)', txt) \
+       and not re.search(r'(?<!\w)(?:medici(?:on|ones)|topografic|bdts?)(?!\w)', txt):
         es_cat3 = False
 
     if es_cat3:
@@ -969,7 +977,7 @@ def procesar_agenda(texto):
         linea_principal = re.sub(r'(?i)^\s*buen[oa]s?\s+(?:noches|tardes|d[ií]as)[\s,\.]*', '', linea_principal).strip()
         linea_principal = re.sub(r'(?i)^\s*adicional\s+a\s+la\s+agenda[^,]*,\s*', '', linea_principal).strip()
         linea_principal = re.sub(r'(?i)^\s*del\s+Frente\s+\d+[\s,]*', '', linea_principal).strip()
-        linea_principal = re.sub(r'(?i)\s*\|\s*F\d+(?:\s*(?:[-–,]|y)\s*F?\d+)*\s*$', '', linea_principal).strip()
+        linea_principal = re.sub(r'(?i)\s*\|\s*(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,\s*)?F\d+(?:\s*(?:[-–,]|y)\s*F?\d+)*\s*$', '', linea_principal).strip()  # «| F4-F5» o «| MEX-QRO, F4-F5»
         linea_principal = re.sub(r'^[-–—\s]+', '', linea_principal).strip()
         if linea_principal[:1].islower():
             linea_principal = linea_principal[0].upper() + linea_principal[1:]
@@ -1023,7 +1031,7 @@ def procesar_agenda(texto):
                 num = frente_inline.group(1)
                 frente = type('_', (), {'group': lambda self, n: num})()
         if not frente:
-            frente_pipe = re.search(r'\|\s*F\.?\s*(\d+)\b', bloque, re.IGNORECASE)
+            frente_pipe = re.search(r'\|\s*(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,\s*)?F\.?\s*(\d+)\b', bloque, re.IGNORECASE)
             if frente_pipe:
                 num = frente_pipe.group(1)
                 frente = type('_', (), {'group': lambda self, n: num})()
@@ -1716,6 +1724,7 @@ def _procesar_buffer(chat_id):
     if tara_consultas.atender(chat_id, texto):
         return
 
+    texto = texto.replace('\u200b', '')   
     # Continuación que llegó tarde y sin encabezado: se le pone el de la agenda anterior del chat.
     if re.match(r"\s*\d{1,2}[.)]\s", texto) and not re.search(r"(?i)proyecto|agenda|fecha\s*:", texto[:300]):
         previo = _encabezados.get(chat_id)
@@ -1726,7 +1735,7 @@ def _procesar_buffer(chat_id):
         _encabezados[chat_id] = (datetime.now(), texto[:inicio.start()].strip())
 
     if not (re.search(r'(?i)agenda', texto)
-            or "Fecha:" in texto
+            or re.search(r'(?i)\b(?:fecha|proyecto)\s*:', texto)
             or _CLAVES_RE.search(texto[:200])
             or _resolver_abrev_tramo(texto[:200])):
         telegram_enviar(chat_id, "Eso no parece agenda. Reenvíame el mensaje del grupo tal cual.")
