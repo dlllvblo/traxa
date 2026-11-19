@@ -650,38 +650,137 @@ def integrar_parcelas(resumen, parcelas):
     return _integrar_codigos(resumen, parcelas, "la parcela", "las parcelas")
 
 # =========================
+# HOMOLOGACIÓN DEL TIPO DE SOLICITUD (acentos, erratas y formas de BDTs/COPs)
+# =========================
+_HOMOLOGAR_PALABRAS = {
+    'reunion': 'reunión', 'poligono': 'polígono', 'poligonos': 'polígonos', 'poligino': 'polígono',
+    'busqueda': 'búsqueda', 'busquedas': 'búsquedas', 'area': 'área', 'areas': 'áreas',
+    'tecnico': 'técnico', 'tecnicos': 'técnicos', 'tecnica': 'técnica', 'tecnicas': 'técnicas',
+    'topografico': 'topográfico', 'topograficos': 'topográficos', 'topografica': 'topográfica',
+    'topografia': 'topografía', 'cartografia': 'cartografía', 'infografia': 'infografía',
+    'avaluo': 'avalúo', 'avaluos': 'avalúos', 'asesoria': 'asesoría', 'asesorias': 'asesorías',
+    'tramite': 'trámite', 'tramites': 'trámites', 'publico': 'público', 'publica': 'pública',
+    'rancheria': 'ranchería', 'notaria': 'notaría',
+    'asercamiento': 'acercamiento', 'asercamientos': 'acercamientos', 'asamble': 'asamblea',
+    'agroforetales': 'agroforestales', 'agroforetal': 'agroforestal',
+    'levantamineto': 'levantamiento', 'distribucuion': 'distribución', 'distribucuión': 'distribución',
+    'yconstrucción': 'y construcción', 'yconstruccion': 'y construcción',
+}
+_HOMOLOGAR_RE = re.compile(r'(?<!\w)(' + '|'.join(sorted(map(re.escape, _HOMOLOGAR_PALABRAS), key=len, reverse=True)) + r')(?!\w)', re.IGNORECASE)
+_SIN_TILDE_CION_RE = re.compile(r'(?<!\w)(\w+?)([cs])ion(?!\w)', re.IGNORECASE)  # medicion → medición
+_SIGLAS_PLURAL_RE = re.compile(r'(?<!\w)(BDT|COP)\s*(?:[´\'’`]\s*[sS]|S)(?!\w)', re.IGNORECASE)  # BDT´s → BDTs
+
+# Respeta mayúsculas de la palabra original: «Medicion» → «Medición», «REUNION» → «REUNIÓN».
+def _como_original(orig, nueva):
+    if orig.isupper() and len(orig) > 1:
+        return nueva.upper()
+    return nueva[0].upper() + nueva[1:] if orig[0].isupper() else nueva
+
+def homologar_tipo(txt):
+    t = re.sub(r'[​-‍⁠﻿]', '', str(txt or ''))
+    t = re.sub(r'\s+', ' ', t).strip().rstrip('.').strip()
+    t = _HOMOLOGAR_RE.sub(lambda m: _como_original(m.group(1), _HOMOLOGAR_PALABRAS[m.group(1).lower()]), t)
+    t = _SIN_TILDE_CION_RE.sub(lambda m: _como_original(m.group(0), (m.group(1) + m.group(2) + 'ión').lower()), t)
+    t = _SIGLAS_PLURAL_RE.sub(lambda m: m.group(1).upper() + 's', t)
+    return t[:1].upper() + t[1:]
+
+# =========================
 # CONTEO DE ACTIVIDADES POR CATEGORÍA (abril → hoy)
 # =========================
-CATEGORIAS_CONTEO = [
-    ("1. Atención a Reuniones/Asambleas/Asesorías",
-     [r'reunion(?:es)?', r'asambleas?', r'asesorias?', r'mesas?\s+de\s+trabajo']),
-    ("2. Caminamientos/Inspecciones",
-     [r'caminamientos?', r'inspecci(?:on|ones)', r'recorridos?', r'visitas?\s+de\s+campo']),
-    ("4. Infografía", [r'infografias?']),
-    ("5. Cartografía", [r'cartografias?', r'planos?', r'mapas?']),
-    ("6. Firmas de convenios y actas",
-     [r'firmas?', r'minutas?']),
-    ("7. Acercamientos/Sensibilización/Negociación",
-     [r'a[cs]ercamientos?', r'sensibilizaci(?:on|ones)', r'negociaci(?:on|ones)',
-      r'atenci(?:on|ones)', r'citas?\s+con']),
-    ("8. Visitas/Revisiones/Verificaciones",
-     [r'visitas?', r'revisi(?:on|ones)', r'revisar', r'verificaci(?:on|ones)',
-      r'identificaci(?:on|ones)', r'ubicaci(?:on|ones)\s+de']),
-    ("9. Consultas y búsquedas registrales",
-     [r'consultas?', r'busquedas?', r'antecedentes', r'catastro', r'notarias?',
-      r'rpp', r'expedientes?', r'recopilaci(?:on|ones)']),
-    ("10. Peritajes/Avalúos/Acompañamientos",
-     [r'peritajes?', r'peritos?', r'avaluos?', r'acompanamientos?']),
-    ("11. Marcaje/Delimitación",
-     [r'marcajes?', r'delimitaci(?:on|ones)']),
-    ("12. Mesas sociales/Convocatorias/Videoconferencias",
-     [r'mesas?\s+(?:de\s+atencion|social(?:es)?)', r'videoconferencias?',
-      r'convocatorias?', r'conciliaci(?:on|ones)']),
-    ("13. Censos/Reubicaciones",
-     [r'censos?', r'reubicaci(?:on|ones)', r'cis', r'cedulas?\s+de\s+informacion']),
-    ("14. Presentaciones/Entregas",
-     [r'presentaci(?:on|ones)', r'entregas?', r'recepci(?:on|ones)',
-      r'notificaci(?:on|ones)']),
+# Catálogo homologado: categoría → acciones → patrones (texto en minúsculas y sin acentos).
+# La acción es el nivel fino que se consulta («cuántas sensibilizaciones en junio»).
+CATALOGO_ACTIVIDADES = [
+    ("1. Atención a Reuniones/Asambleas/Asesorías", [
+        ("Reunión", [r'reunion(?:es)?', r'encuentros?']),
+        ("Asamblea", [r'asambleas?']),
+        ("Asesoría", [r'asesorias?']),
+        ("Mesa de trabajo", [r'mesas?\s+de\s+trabajo', r'mesas?\s+tecnicas?']),
+    ]),
+    ("2. Caminamientos/Inspecciones/Reconocimientos", [
+        ("Caminamiento", [r'caminamientos?']),
+        ("Inspección", [r'inspecci(?:on|ones)']),
+        ("Recorrido", [r'recorridos?', r'visitas?\s+de\s+campo']),
+        ("Reconocimiento", [r'reconocimientos?']),
+        ("Vuelo de dron", [r'vuelos?\s+de\s+drones?', r'drones?']),
+    ]),
+    ("3. Levantamientos Agenda (Topográficos/BDTs Agroforestales y Construcción)", [
+        ("Medición", [r'medici(?:on|ones)']),
+        ("Levantamiento", [r'levantamientos?', r'topografic[oa]s?', r'poligonal(?:es)?', r'bdts?',
+                           r'construcci(?:on|ones)', r'agroforestal(?:es)?', r'agricolas?']),
+        ("Replanteo", [r'replante(?:os?|amientos?)']),
+        ("Rectificación de medidas", [r'rectificaci(?:on|ones)\s+de\s+medidas']),
+    ]),
+    ("4. Gabinete (Cartografía/Infografía/Fichas BDT)", [
+        ("Ficha BDT", [r'elaboraci(?:on|ones)\s+de\s+(?:las?\s+)?fichas?', r'fichas?']),
+        ("Plano", [r'elaboraci(?:on|ones)\s+de(?:l|\s+los?)?\s+planos?', r'planos?']),
+        ("Infografía", [r'elaboraci(?:on|ones)\s+de\s+(?:las?\s+)?infografias?', r'infografias?']),
+        ("Cartografía", [r'elaboraci(?:on|ones)\s+de\s+(?:las?\s+|los?\s+)?(?:cartografias?|mapas?)',
+                         r'cartografias?', r'mapas?']),
+    ]),
+    ("5. Firmas de convenios y actas", [
+        ("Firma", [r'firmas?']),
+        ("Minuta", [r'minutas?']),
+    ]),
+    ("6. Acercamientos/Sensibilización/Negociación", [
+        ("Acercamiento", [r'a[cs]ercamientos?']),
+        ("Sensibilización", [r'sensibilizaci(?:on|ones)']),
+        ("Negociación", [r'negociaci(?:on|ones)']),
+        ("Atención a afectados", [r'atenci(?:on|ones)', r'citas?\s+con']),
+        ("Contacto con propietarios", [r'contactos?\s+con', r'localizaci(?:on|ones)\s+de\s+(?:los?\s+)?propietarios?']),
+        ("Socialización", [r'socializaci(?:on|ones)',
+                           r'explicaci(?:on|ones)\s+de\s+(?:la\s+|las\s+)?afectaci(?:on|ones)']),
+    ]),
+    ("7. Visitas/Revisiones/Verificaciones", [
+        ("Visita", [r'visitas?']),
+        ("Revisión", [r'revisi(?:on|ones)', r'revisar']),
+        ("Verificación", [r'verificaci(?:on|ones)', r'verificar(?:a|an)?', r'evaluaci(?:on|ones)']),
+        ("Identificación", [r'identificaci(?:on|ones)', r'ubicaci(?:on|ones)\s+de']),
+    ]),
+    ("8. Consultas y trámites registrales", [
+        ("Consulta registral", [r'consultas?', r'catastro', r'notarias?', r'expedientes?']),
+        ("Búsqueda de antecedentes", [r'busquedas?', r'antecedentes']),
+        ("Recopilación de documentación", [r'recopilaci(?:on|ones)', r'recabar\s+documentaci(?:on|ones)']),
+        ("Inscripción en RPP", [r'rpp', r'registro\s+publico', r'inscripci(?:on|ones)',
+                                r'ingresos?\s+de\s+(?:convenios|solicitudes|documentos?)']),
+        ("Certificación", [r'certificaci(?:on|ones)']),
+        ("Seguimiento de trámite", [r'seguimientos?\s+(?:a|de)\s+(?:las?\s+|los?\s+)?(?:solicitudes|oficios?)']),
+    ]),
+    ("9. Peritajes/Avalúos/Acompañamientos", [
+        ("Peritaje", [r'peritajes?', r'peritos?', r'levantamientos?\s+de\s+peritajes?']),
+        ("Avalúo", [r'avaluos?']),
+        ("Acompañamiento", [r'acompanamientos?']),
+        ("Asistencia técnica", [r'asistencias?\s+tecnicas?']),
+    ]),
+    ("10. Marcaje/Delimitación", [
+        ("Marcaje", [r'marcajes?']),
+        ("Delimitación", [r'delimitaci(?:on|ones)']),
+    ]),
+    ("11. Mesas sociales/Convocatorias/Videoconferencias", [
+        ("Mesa de atención social", [r'mesas?\s+(?:de\s+atencion|social(?:es)?)(?:\s+social(?:es)?)?']),
+        ("Videoconferencia", [r'videoconferencias?']),
+        ("Convocatoria", [r'convocatorias?']),
+        ("Conciliación", [r'conciliaci(?:on|ones)']),
+    ]),
+    ("12. Censos/Reubicaciones", [
+        ("Censo", [r'censos?', r'levantamientos?\s+de\s+(?:los?\s+)?censos?']),
+        ("CIS", [r'cis', r'cedulas?\s+de\s+informacion',
+                 r'(?:levantamientos?|aplicaci(?:on|ones))\s+de\s+(?:las?\s+)?(?:cis|cedulas?)']),
+        ("Reubicación", [r'reubicaci(?:on|ones)', r'reubicar', r'desocupaci(?:on|ones)']),
+        ("Inventario de bienes", [r'inventarios?']),
+    ]),
+    ("13. Presentaciones/Entregas", [
+        ("Presentación", [r'presentaci(?:on|ones)']),
+        ("Entrega", [r'(?<!acta\s)(?<!actas\s)(?<!acta\sde\s)(?<!actas\sde\s)entregas?', r'recepci(?:on|ones)']),
+        ("Notificación", [r'notificaci(?:on|ones)']),
+    ]),
+    ("14. Seguimiento de afectaciones", [
+        ("Seguimiento de afectaciones", [r'seguimientos?\s+(?:a\s+|de\s+|en\s+)?(?:las?\s+|los?\s+)?afectaci(?:on|ones)',
+                                         r'seguimientos?\s*[-–:]', r'seguimientos?\s+a\s+las\s+areas']),
+    ]),
+    ("15. Anuencias y permisos", [
+        ("Anuencia", [r'anuencias?']),
+        ("Permiso", [r'permisos?']),
+    ]),
 ]
 
 CAT3_NOMBRE = "3. Levantamientos Agenda (Topográficos/BDTs Agroforestales y Construcción)"
@@ -689,51 +788,72 @@ CAT3_SUB = [
     ("BDTs Construcción",  [r'construcci(?:on|ones)']),
     ("BDTs Agroforestal",  [r'agroforestal(?:es)?', r'agricolas?']),
 ]
-CAT3_GENERAL = ("Topográficos/Mediciones",
-                [r'medici(?:on|ones)', r'levantamientos?', r'topografic[oa]s?', r'bdts?'])
+CAT3_GENERAL = ("Topográficos/Mediciones", [])
+# Lista (nombre, patrones) de las categorías fuera de la 3, como la leen el conteo y el mapa.
+CATEGORIAS_CONTEO = [(c, [p for _, ps in acc for p in ps]) for c, acc in CATALOGO_ACTIVIDADES if c != CAT3_NOMBRE]
 
 # Compila los patrones de una categoría como palabras completas.
 def _compilar_cat(pats):
     return [re.compile(r'(?<!\w)' + p + r'(?!\w)') for p in pats]
 
-_CAT_PATRONES  = [(n, _compilar_cat(p)) for n, p in CATEGORIAS_CONTEO]
-_CAT3_SUB_PAT  = [(n, _compilar_cat(p)) for n, p in CAT3_SUB]
-_CAT3_GEN_PAT  = _compilar_cat(CAT3_GENERAL[1])
+_CAT3_SUB_PAT = [(n, _compilar_cat(p)) for n, p in CAT3_SUB]
+# Sustantivos que nombran el objeto, no la acción: no abren una acción coordinada («firma de COP y BDT»).
+_OBJETOS = {r'bdts?', r'fichas?', r'planos?', r'mapas?', r'construcci(?:on|ones)', r'agroforestal(?:es)?', r'agricolas?'}
+# (categoría, acción, patrón compilado, ¿puede abrir una acción coordinada?)
+_PATRONES_ACCION = [(c, a, re.compile(r'(?<!\w)' + p + r'(?!\w)'), p not in _OBJETOS)
+                    for c, acc in CATALOGO_ACTIVIDADES for a, ps in acc for p in ps]
+ACCIONES = [a for _, acc in CATALOGO_ACTIVIDADES for a, _ in acc]
 
-# Clasifica la actividad en categorías de conteo (y subcategorías de la cat. 3).
-def clasificar_actividad(tipo_solicitud, detalle=""):
+# Separadores entre acciones: «y», «así como», «;», «,», guion, paréntesis, saltos y listas numeradas.
+_SEP_ACCION = re.compile(r'\s+(?:y|e|asi\s+como)\s+|\s*[;,\n()]\s*|\s+[-–]\s+|(?<!\w)\d+[.)]\s+')
+# Palabras que pueden ir antes del verbo sin cambiar la acción.
+_RELLENO = re.compile(r'(?:(?:y|e|de|del|la|las|el|los|a|al|en|se|realizar|continuacion\s+de|'
+                      r'primera|primer|segunda|segundo|tercera|tercer|nueva|nuevo)\s+)*')
+
+# Acción de un texto: la coincidencia más temprana (y la más larga si empatan) → (inicio, categoría, acción).
+def _accion(txt, secundaria=False):
+    mejor = None
+    for cat, acc, p, abre in _PATRONES_ACCION:
+        if secundaria and not abre:
+            continue
+        m = p.search(txt)
+        if m and (mejor is None or (m.start(), -len(m.group())) < (mejor[0], -mejor[1])):
+            mejor = (m.start(), len(m.group()), cat, acc)
+    return mejor and (mejor[0], mejor[2], mejor[3])
+
+# Acciones de una actividad: la principal y las que se coordinan con «y», «,», «;»…
+# (una palabra suelta a media frase no suma otra acción). → [(categoría, acción)]
+def acciones_actividad(tipo_solicitud):
     txt = _sin_acentos(str(tipo_solicitud or "")).lower()
+    principal = _accion(txt)
+    if not principal:
+        return []
+    salida = [principal[1:]]
+    for trozo in _SEP_ACCION.split(txt)[1:]:
+        trozo = trozo.strip()
+        a = _accion(trozo, secundaria=True)
+        if a and a[0] == _RELLENO.match(trozo).end() and a[1:] not in salida:
+            salida.append(a[1:])
+    return salida
+
+# Acciones que menciona un texto, en cualquier parte: sirve para preguntas y para filtrar
+# («cuántas sensibilizaciones» incluye «Reunión de sensibilización»). BDT solo no es levantamiento.
+def acciones_en_texto(texto):
+    txt = _sin_acentos(str(texto or "")).lower()
+    return sorted({a for c, a, p, abre in _PATRONES_ACCION
+                   if (abre or c != CAT3_NOMBRE) and p.search(txt)}, key=ACCIONES.index)
+
+# Clasifica la actividad en categorías de conteo (cada una una vez) y subcategorías de la 3.
+def clasificar_actividad(tipo_solicitud, detalle=""):
+    cats = sorted({c for c, _ in acciones_actividad(tipo_solicitud)}, key=lambda n: int(n.split('.')[0]))
     hits = []
-
-    for nombre, patrones in _CAT_PATRONES:
-        if any(p.search(txt) for p in patrones):
+    for nombre in cats:
+        if nombre != CAT3_NOMBRE:
             hits.append((nombre, None))
-
-    es_cat3 = (any(p.search(txt) for p in _CAT3_GEN_PAT)
-               or any(p.search(txt) for _, pats in _CAT3_SUB_PAT for p in pats))
-
-
-    if es_cat3 and re.search(r'(?<!\w)firmas?(?!\w)', txt) \
-       and not re.search(r'(?<!\w)(?:medici(?:on|ones)|levantamientos?|topografic)', txt):
-        es_cat3 = False
-    # Entregar convenios o revisar fichas de BDT no es levantamiento
-    if es_cat3 and re.search(r'(?<!\w)(?:entregas?|convenios?|fichas?|revisar)(?!\w)', txt) \
-       and not re.search(r'(?<!\w)(?:medici(?:on|ones)|levantamientos?|topografic)', txt):
-        es_cat3 = False
-    # Levantar CIS (cédulas socioeconómicas) es censo, no levantamiento topográfico
-    if es_cat3 and re.search(r'(?<!\w)(?:cis|cedulas?)(?!\w)', txt) \
-       and not re.search(r'(?<!\w)(?:medici(?:on|ones)|topografic|bdts?)(?!\w)', txt):
-        es_cat3 = False
-
-    if es_cat3:
-        txt_sub = txt + " " + _sin_acentos(str(detalle or "")).lower()
-        sub_hits = [n for n, pats in _CAT3_SUB_PAT if any(p.search(txt_sub) for p in pats)]
-        if sub_hits:
-            for s in sub_hits:
-                hits.append((CAT3_NOMBRE, s))
-        else:
-            hits.append((CAT3_NOMBRE, CAT3_GENERAL[0]))
-
+            continue
+        txt_sub = _sin_acentos(f"{tipo_solicitud or ''} {detalle or ''}").lower()
+        subs = [n for n, pats in _CAT3_SUB_PAT if any(p.search(txt_sub) for p in pats)]
+        hits += [(CAT3_NOMBRE, s) for s in subs] or [(CAT3_NOMBRE, "Topográficos/Mediciones")]
     return hits
 
 # Convierte hora con am/pm a formato 24 h (HH:MM).
@@ -1387,7 +1507,7 @@ def procesar_agenda(texto):
                 "FECHA DE SOLICITUD": fecha_solicitud,
                 "SOLICITANTE": "SEDATU",
                 "MEDIO DE SOLICITUD": "WhatsApp",
-                "TIPO DE SOLICITUD": actividad_txt,
+                "TIPO DE SOLICITUD": homologar_tipo(actividad_txt),
                 "PROYECTO FERROVIARIO": proyecto_final,
                 "UBICACIÓN": ubic_url,
                 "TIPO DE PROPIEDAD": tipo_propiedad,
@@ -1457,7 +1577,7 @@ def procesar_agenda(texto):
             hora_min = f"{int(mh.group(1)):02d}:{mh.group(2)}" if mh else hora_txt
             texto_min = re.sub(r'\s*\(\d{1,2}:\d{2}\s*(?:hrs?)?\)', '', minuta_txt).strip()
             fila_min = armar_fila(url, estado_geo, municipio_geo, texto_min)
-            fila_min["TIPO DE SOLICITUD"] = texto_min
+            fila_min["TIPO DE SOLICITUD"] = homologar_tipo(texto_min)
             fila_min["FECHA Y HORA"] = f"{fecha} {hora_min}"
             filas.append(fila_min)
 
@@ -1993,8 +2113,9 @@ def api_conteo():
                 otras += 1
                 sin_clasificar.append(f.get("TIPO DE SOLICITUD", ""))
                 continue
-            for cat, sub in hits:
+            for cat in {c for c, _ in hits}:      # la 3 con dos subcategorías cuenta una vez
                 conteo[cat] += 1
+            for cat, sub in hits:
                 if sub:
                     cat3_desglose[sub] += 1
 

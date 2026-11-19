@@ -53,7 +53,7 @@ AYUDA = (
     "📤📅 Subir la agenda del día, solamente reenvíame el mensaje tal cual y me encargo.\n\n"
     "🚄🧐 Consultar la agenda de cualquier tramo, periodo, estado o municipio:\n"
     "• Qué actividades hay (hoy, mañana, una fecha o un rango de fechas)\n"
-    "• Cuántas hubo de un tipo (firmas, reuniones, levantamientos…) o con una dependencia\n"
+    "• Cuántas hubo de un tipo (firmas, sensibilizaciones, levantamientos…), por mes o con una dependencia\n"
     "• Resumen por proyecto, tipo de actividad y estado\n"
     "• Lista de actividades de un periodo o proyecto específico\n"
     "• Resumen por día, semana o mes\n"
@@ -357,9 +357,14 @@ def _lugar(n, filas):
 def interpretar(texto, filas, hoy):
     n = _n(texto)
     claves, sin_proy = _proyectos(texto, n)
-    rango = periodo(n, hoy)
+    rango = periodo(re.sub(r"\bpor (mes|meses)\b|\bmensual(es)?\b", " ", n), hoy)   # «por mes» es desglose, no periodo
     estado, municipio, estado_txt, municipio_txt = _lugar(sin_proy, filas)
     categorias = sorted({re.sub(r"^\d+\.\s*", "", c) for c, _ in N.clasificar_actividad(texto)})
+    acciones = N.acciones_en_texto(texto)
+    if acciones and not re.search(r"\bcategorias?\b", n):
+        categorias = []     # «cuántas sensibilizaciones» cuenta esa acción, no toda su categoría
+    else:
+        acciones = []
     celda = N._sin_acentos(texto.upper())
     deps = [canon for canon, pats in N._DEP_PATRONES.items() if any(p.search(celda) for p in pats)]
     if "GOB. MUNICIPAL" in deps and not re.search(r"AYUNTAMIENTO|GOBIERNO|PRESIDENCIA MUNICIPAL", celda):
@@ -374,7 +379,7 @@ def interpretar(texto, filas, hoy):
     else:
         intencion = ""
 
-    entendido = bool(rango or claves or estado or municipio or categorias or deps or intencion)
+    entendido = bool(rango or claves or estado or municipio or categorias or acciones or deps or intencion)
     explicita = bool(intencion)
     if not intencion:
         intencion = "listar" if rango and (rango[1] - rango[0]).days <= 7 else "contar"
@@ -387,7 +392,7 @@ def interpretar(texto, filas, hoy):
     return {"intencion": intencion, "desde": desde, "hasta": hasta, "nota_periodo": por_defecto,
             "proyectos": claves, "estado": estado, "municipio": municipio,
             "estado_txt": estado_txt, "municipio_txt": municipio_txt,
-            "categorias": categorias, "dependencias": deps, "entendido": entendido,
+            "categorias": categorias, "acciones": acciones, "dependencias": deps, "entendido": entendido,
             "con_periodo": bool(rango), "intencion_explicita": explicita}
 
 
@@ -410,11 +415,14 @@ def filtrar(q, filas):
             f.get("TIPO DE SOLICITUD", ""), f.get("ACTIVIDADES DESARROLLADAS", ""))}
         if q["categorias"] and not (cats & set(q["categorias"])):
             continue
+        acciones = N.acciones_en_texto(f.get("TIPO DE SOLICITUD", ""))
+        if q.get("acciones") and not (set(acciones) & set(q["acciones"])):
+            continue
         if q["dependencias"]:
             celda = N._sin_acentos(str(f.get("DEPENDENCIAS PARTICIPANTES", "")).upper())
             if not all(any(p.search(celda) for p in N._DEP_PATRONES[c]) for c in q["dependencias"]):
                 continue
-        salida.append({"fecha": d, "hora": _hora(f), "proyecto": clave, "cats": cats,
+        salida.append({"fecha": d, "hora": _hora(f), "proyecto": clave, "cats": cats, "acciones": acciones,
                        "estado": (f.get("ESTADO") or "").strip(),
                        "municipio": (f.get("MUNICIPIO") or "").strip(),
                        "actividad": (f.get("TIPO DE SOLICITUD") or "").strip(),
@@ -440,6 +448,8 @@ def _encabezado(q):
         filtros.append("municipio " + q["municipio_txt"])
     if q["categorias"]:
         filtros.append("categoría " + " / ".join(_corto(c) for c in q["categorias"]))
+    if q.get("acciones"):
+        filtros.append("acción " + " / ".join(q["acciones"]))
     if q["dependencias"]:
         filtros.append("con " + " y ".join(q["dependencias"]))
     if filtros:
@@ -450,17 +460,20 @@ def _encabezado(q):
 # Nombres cortos de las categorías, solo para mostrar.
 CORTO = {
     "Atención a Reuniones/Asambleas/Asesorías": "Reuniones y asambleas",
-    "Caminamientos/Inspecciones": "Caminamientos",
+    "Caminamientos/Inspecciones/Reconocimientos": "Caminamientos",
+    "Gabinete (Cartografía/Infografía/Fichas BDT)": "Gabinete (fichas, planos)",
     "Levantamientos Agenda (Topográficos/BDTs Agroforestales y Construcción)": "Levantamientos (topografía/BDT)",
     "Firmas de convenios y actas": "Firmas",
     "Acercamientos/Sensibilización/Negociación": "Acercamientos",
     "Visitas/Revisiones/Verificaciones": "Visitas y verificaciones",
-    "Consultas y búsquedas registrales": "Consultas registrales",
+    "Consultas y trámites registrales": "Trámites registrales",
     "Peritajes/Avalúos/Acompañamientos": "Peritajes y avalúos",
     "Marcaje/Delimitación": "Marcaje",
     "Mesas sociales/Convocatorias/Videoconferencias": "Mesas y convocatorias",
-    "Censos/Reubicaciones": "Censos",
-    "Presentaciones/Entregas": "Presentaciones",
+    "Censos/Reubicaciones": "Censos y reubicaciones",
+    "Presentaciones/Entregas": "Presentaciones y entregas",
+    "Seguimiento de afectaciones": "Seguimiento de afectaciones",
+    "Anuencias y permisos": "Anuencias",
 }
 
 
@@ -494,6 +507,13 @@ def redactar(q, acts):
         if not q["proyectos"] and len({a['proyecto'] for a in acts}) > 1:
             conteo = Counter(a["proyecto"] for a in acts).most_common()
             texto += "\nPor proyecto:\n" + "\n".join(f"• {k} = {v}" for k, v in conteo)
+        if len(q.get("acciones") or []) > 1:
+            conteo = Counter(x for a in acts for x in a["acciones"] if x in q["acciones"]).most_common()
+            texto += "\nPor acción:\n" + "\n".join(f"• {k} = {v}" for k, v in conteo)
+        meses = Counter((a["fecha"].year, a["fecha"].month) for a in acts)
+        if len(meses) > 1:
+            texto += "\nPor mes:\n" + "\n".join(f"• {MESES[m - 1].capitalize()} {y} = {v}"
+                                                  for (y, m), v in sorted(meses.items()))
         return texto
 
     if q["intencion"] == "resumen":
@@ -612,9 +632,13 @@ def _heredar(q, chat_id, texto):
         p.update(desde=q["desde"], hasta=q["hasta"], nota_periodo="", con_periodo=True)
     if q["intencion_explicita"]:
         p["intencion"] = q["intencion"]
-    for k in ("proyectos", "categorias", "dependencias"):
-        if q[k]:
+    for k in ("proyectos", "categorias", "acciones", "dependencias"):
+        if q.get(k):
             p[k] = q[k]
+    if q.get("acciones"):
+        p["categorias"] = []
+    elif q["categorias"]:
+        p["acciones"] = []
     if q["estado"] or q["municipio"]:
         p.update({k: q[k] for k in ("estado", "municipio", "estado_txt", "municipio_txt")})
     p["entendido"] = True
@@ -742,7 +766,8 @@ def _grafica(texto, hoy, chat_id):
         q = interpretar(texto, filas, hoy)
     except FechaInvalida:
         return "Esa fecha no existe 🤔 Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
-    propia = q["con_periodo"] or q["proyectos"] or q["estado"] or q["municipio"] or q["categorias"] or q["dependencias"]
+    propia = (q["con_periodo"] or q["proyectos"] or q["estado"] or q["municipio"] or q["categorias"]
+              or q["acciones"] or q["dependencias"])
     if not propia:
         previa = _ULTIMA.get(chat_id)
         if not previa or time.time() - previa[0] > HIST_MINUTOS * 60:
@@ -757,6 +782,11 @@ def _grafica(texto, hoy, chat_id):
     if re.search(r"\bpor (dia|dias|fecha|fechas)\b|\bdiari[ao]\b", n):
         eje, conteo = "día", Counter(a["fecha"].strftime("%d/%m") for a in acts)
         conteo = sorted(conteo.items(), key=lambda x: (x[0][3:], x[0][:2]))
+    elif re.search(r"\bpor (mes|meses)\b|\bmensual\b", n):
+        eje, conteo = "mes", Counter((a["fecha"].year, a["fecha"].month) for a in acts)
+        conteo = [(f"{MESES[m - 1][:3]} {y}", v) for (y, m), v in sorted(conteo.items())]
+    elif re.search(r"\bpor (accion|acciones)\b", n):
+        eje, conteo = "acción", Counter(x for a in acts for x in a["acciones"]).most_common()
     elif re.search(r"\bpor (tipo|tipos|categoria|categorias|actividad|actividades)\b", n):
         eje, conteo = "tipo de actividad", Counter(_corto(c) for a in acts for c in a["cats"]).most_common()
     elif re.search(r"\bpor (estado|estados)\b", n):
@@ -773,7 +803,7 @@ def _grafica(texto, hoy, chat_id):
     periodo = _etiqueta_periodo(q["desde"], q["hasta"])
     try:
         png = _dibujar(conteo, titulo, periodo + (" · " + filtros[0].replace("Filtros: ", "") if filtros else ""),
-                       eje == "día")
+                       eje in ("día", "mes"))
     except ImportError:
         return "No puedo hacer gráficas todavía: falta instalar matplotlib en el servidor."
     pie = f"📊 {titulo}\nPeriodo: {periodo}" + ("\n" + filtros[0] if filtros else "") + f"\nTotal: {_plural(len(acts))}"

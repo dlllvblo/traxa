@@ -134,7 +134,7 @@ def _capas_de(f):
         claves.append(_sin_numero(cat))
         if sub:
             claves.append("sub|" + sub)
-    return claves
+    return list(dict.fromkeys(claves))      # la 3 con dos subcategorías cuenta una vez
 
 
 # Lee el Sheet y arma el mapa para el rango (y proyecto) pedidos.

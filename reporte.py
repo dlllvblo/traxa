@@ -127,7 +127,7 @@ def datos(desde, hasta):
                                       f.get("ACTIVIDADES DESARROLLADAS", ""))
         if not hits:
             sin_categoria += 1
-        for nombre_cat, _sub in hits:
+        for nombre_cat in {c for c, _ in hits}:     # la 3 con dos subcategorías cuenta una vez
             cat[re.sub(r"^\d+\.\s*", "", nombre_cat)] += 1
 
         tipo = re.sub(r"\s+", " ", f.get("TIPO DE PROPIEDAD", "") or "").strip()
