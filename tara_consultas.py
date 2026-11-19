@@ -57,6 +57,7 @@ AYUDA = (
     "• Resumen por proyecto, tipo de actividad y estado\n"
     "• Lista de actividades de un periodo o proyecto específico\n"
     "• Resumen por día, semana o mes\n"
+    "• Si quieres, puedo hacer un gráfico de barras con los totales, solamente escribe «gráfico» o «gráfica»\n\n"
     "Después puedes seguir con «¿y mañana?» o «¿y en TMQ?».\n\n"
     "O platicar de lo que gustes…\n\n"
     "Atajos: /hoy  /manana  /semana  /mes  /ayuda"
