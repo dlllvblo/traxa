@@ -576,6 +576,8 @@ $('f-proy').addEventListener('change',cargar);
 // Fechas que llegan desde el tablero: /mapa?desde=AAAA-MM-DD&hasta=AAAA-MM-DD
 const q=new URLSearchParams(location.search);
 if(q.get('desde')&&q.get('hasta')){$('f-desde').value=q.get('desde');$('f-hasta').value=q.get('hasta');}
+// Capa elegida desde Conteo (/mapa?capa=…): se abre directo en ella, sin el manual.
+if(q.get('capa')){CAPA=q.get('capa');manual.classList.remove('abierto');}
 cargar();
 </script>
 </body>

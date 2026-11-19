@@ -76,7 +76,20 @@
 
   .cat{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:var(--radius);
     padding:18px 20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;
-    border-top:4px solid var(--bt, var(--c, var(--guinda)));animation:pop .4s ease}
+    border-top:4px solid var(--bt, var(--c, var(--guinda)));animation:pop .4s ease;
+    position:relative;transition:transform .28s ease,box-shadow .28s ease,border-color .28s ease}
+  /* Al pasar el cursor: se alza un poco y se ilumina con el color de su borde */
+  .cat::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .28s ease;
+    background:radial-gradient(120% 75% at 50% 0%,color-mix(in srgb,var(--bt,var(--c)) 13%,transparent),transparent 72%)}
+  .cat.link{cursor:pointer}
+  .cat.link:hover,.cat.link:focus-visible{transform:translateY(-4px);border-color:color-mix(in srgb,var(--bt,var(--c)) 45%,var(--line));
+    box-shadow:0 18px 34px -16px color-mix(in srgb,var(--bt,var(--c)) 55%,transparent)}
+  .cat.link:hover::after,.cat.link:focus-visible::after{opacity:1}
+  .cat.link:focus-visible{outline:2px solid var(--guinda);outline-offset:2px}
+  .cat .ir{position:absolute;top:3px;right:9px;font-size:.8rem;line-height:1;font-family:'Noto Sans',sans-serif;color:var(--bt,var(--c));
+    opacity:0;transform:translateY(2px);transition:opacity .28s ease,transform .28s ease}
+  .cat.link:hover .ir,.cat.link:focus-visible .ir{opacity:1;transform:none}
+  .cat .centro{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center}
   @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   /* Border-top por columna (grid de 5) */
   .cards .cat:nth-child(5n+1){--bt:#6E152E}
@@ -86,12 +99,13 @@
   .cards .cat:nth-child(5n+5){--bt:#a42145}
   .cat .num-cat{font-family:'Noto Sans',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.2em;
     color:var(--c);text-transform:uppercase}
-  .cat .nombre{font-family:'Patria','Noto Sans',sans-serif;font-size:.92rem;font-weight:600;line-height:1.35;color:var(--text);flex:1}
+  .cat .nombre{font-family:'Patria','Noto Sans',sans-serif;font-size:.92rem;font-weight:600;line-height:1.35;color:var(--text)}
   .cat .valor{font-family:'Patria','Noto Sans',sans-serif;font-size:3rem;font-weight:700;line-height:1;letter-spacing:-.02em;color:var(--c)}
   .cat .pct{font-family:'Noto Sans',sans-serif;font-size:.62rem;color:var(--muted-2)}
 
   .desglose{border-top:1px solid var(--line-soft);padding-top:10px;display:flex;flex-direction:column;gap:7px}
-  .desg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.7rem}
+  .desg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.7rem;border-radius:6px;padding:2px 4px;margin:0 -4px;transition:background .2s ease}
+  .desg-row:hover{background:color-mix(in srgb,var(--dc) 12%,transparent)}
   .desg-row .k{color:var(--muted);display:flex;align-items:center;gap:7px;min-width:0}
   .desg-row .k::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--dc);flex:0 0 auto}
   .desg-row .v{font-family:'Noto Sans',sans-serif;font-weight:700;color:var(--text-strong)}
@@ -142,7 +156,9 @@
   <div class="topbar">
     <div class="brand">
       <div class="logo" aria-hidden="true">
-        <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 20h18"/><path d="M6 20V9M11 20V4M16 20v-8M21 20V7"/>
+        </svg>
       </div>
       <div><h1>Conteo de Actividades</h1><div class="sub">Por Categoría</div></div>
     </div>
@@ -215,10 +231,24 @@ function countUp(el,target,dur=900){
     if(t<1)requestAnimationFrame(tick);else el.dataset.cur=target;})(start);
 }
 
-function crearTarjeta({numLabel,nombre,valor,pct,color,desglose}){
+// Abre el Geovisualizador en la capa indicada, con las fechas del filtro si las hay.
+function irAlMapa(capa){
+  const p=new URLSearchParams({capa});
+  const fd=document.getElementById('f-desde').value, fh=document.getElementById('f-hasta').value;
+  if(fd&&fh){p.set('desde',fd);p.set('hasta',fh);}
+  location.href='/mapa?'+p;
+}
+
+function crearTarjeta({numLabel,nombre,valor,pct,color,desglose,capa}){
   const card=document.createElement('div');
-  card.className='cat';
+  card.className='cat'+(capa?' link':'');
   card.style.setProperty('--c',color);
+  if(capa){
+    card.tabIndex=0;card.setAttribute('role','link');card.title='Ver esta capa en el Geovisualizador';
+    card.addEventListener('click',()=>irAlMapa(capa));
+    card.addEventListener('keydown',e=>{if(e.key==='Enter')irAlMapa(capa);});
+    const ir=document.createElement('span');ir.className='ir';ir.textContent='↗';ir.setAttribute('aria-hidden','true');card.append(ir);
+  }
 
   const num=document.createElement('div');
   num.className='num-cat';
@@ -236,8 +266,11 @@ function crearTarjeta({numLabel,nombre,valor,pct,color,desglose}){
   p.className='pct';
   p.textContent=pct;
 
+  const centro=document.createElement('div');
+  centro.className='centro';
+  centro.append(val,p);
   if(numLabel){card.append(num);}
-  card.append(nom,val,p);
+  card.append(nom,centro);
 
   if(desglose && Object.keys(desglose).length){
     const box=document.createElement('div');
@@ -249,6 +282,7 @@ function crearTarjeta({numLabel,nombre,valor,pct,color,desglose}){
       const kEl=document.createElement('span');kEl.className='k';kEl.textContent=k;
       const vEl=document.createElement('span');vEl.className='v';vEl.textContent=(v||0).toLocaleString('es-MX');
       row.append(kEl,vEl);
+      if(capa){row.title='Ver «'+k+'» en el Geovisualizador';row.addEventListener('click',e=>{e.stopPropagation();irAlMapa('sub|'+k);});}
       box.appendChild(row);
     });
     card.appendChild(box);
@@ -298,6 +332,7 @@ async function cargar(){
         pct:Math.round(v/denomPct*100)+"% de los conceptos",
         color:PALETA[i%PALETA.length],
         desglose:esCat3?(j.cat3_desglose||{}):null,
+        capa:txt,
       });
       cont.appendChild(card);
       countUp(val,v);
@@ -311,6 +346,7 @@ async function cargar(){
       pct:Math.round((j.otras||0)/denomPct*100)+"% de los conceptos",
       color:COLOR_OTRAS,
       desglose:null,
+      capa:'sin',
     });
     cont.appendChild(cOtras);
     countUp(vOtras,j.otras||0);
