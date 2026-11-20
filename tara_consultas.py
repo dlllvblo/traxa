@@ -23,6 +23,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import jsonify, request
 
 from reporte import MESES, _fecha, _hora, _titulo
+import tara_agente
 
 N = None                 # módulo principal (app.py)
 MAX_LISTA = 25           # actividades que caben en un mensaje de lista
@@ -53,6 +54,7 @@ AYUDA = (
     "📤📅 Subir la agenda del día, solamente reenvíame el mensaje tal cual y me encargo.\n\n"
     "🚄🧐 Consultar la agenda de cualquier tramo, periodo, estado o municipio:\n"
     "• Qué actividades hay (hoy, mañana, una fecha o un rango de fechas)\n"
+    "• Lo que quieras saber de la agenda: cuándo fue la última asamblea en un ejido, qué pasó con un polígono, qué tramo lleva más firmas, cómo vamos contra el mes pasado…\n"
     "• Cuántas hubo de un tipo (firmas, sensibilizaciones, levantamientos…), por mes o con una dependencia\n"
     "• Resumen por proyecto, tipo de actividad y estado\n"
     "• Lista de actividades de un periodo o proyecto específico\n"
@@ -393,7 +395,7 @@ def interpretar(texto, filas, hoy):
             "proyectos": claves, "estado": estado, "municipio": municipio,
             "estado_txt": estado_txt, "municipio_txt": municipio_txt,
             "categorias": categorias, "acciones": acciones, "dependencias": deps, "entendido": entendido,
-            "con_periodo": bool(rango), "intencion_explicita": explicita}
+            "con_periodo": bool(rango), "intencion_explicita": explicita, "hoy": hoy}
 
 
 # Filas del Sheet que cumplen el periodo y los filtros.
@@ -496,6 +498,132 @@ def _por_proyecto(acts):
     return " · ".join(f"{k} {v}" for k, v in c.most_common())
 
 
+DIAS_LARGOS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+# Plural en español de una acción del catálogo: «Reunión» → «reuniones», «Vuelo de dron» → «vuelos de dron».
+def _plural_accion(nombre, n):
+    primera, _, resto = nombre.partition(" ")
+    if n != 1 and not primera.isupper():
+        if primera.endswith("ón"):
+            primera = primera[:-2] + "ones"
+        elif primera.endswith("z"):
+            primera = primera[:-1] + "ces"
+        elif primera[-1] in "aeiouáéíóú":
+            primera += "s"
+        elif not primera.endswith("s"):
+            primera += "es"
+    if not primera.isupper():
+        primera = primera[0].lower() + primera[1:]
+    return f"{primera} {resto}".strip()
+
+
+def _lista_y(partes):
+    return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
+# El periodo en palabras: «En septiembre de 2026», «Del 3 al 9 de noviembre de 2026», «En lo que va de 2026».
+def _periodo_en_palabras(desde, hasta, hoy):
+    mes = lambda d: MESES[d.month - 1]
+    if desde == hasta:
+        return f"El {DIAS_LARGOS[desde.weekday()]} {desde.day} de {mes(desde)} de {desde.year}"
+    if desde == date(desde.year, 1, 1) and hasta in (date(desde.year, 12, 31), hoy):
+        return f"En {desde.year}" if hasta.month == 12 and hasta.day == 31 else f"En lo que va de {desde.year}"
+    if desde.day == 1 and (desde.year, desde.month) == (hasta.year, hasta.month) \
+            and hasta in (_fin_de_mes(desde.year, desde.month), hoy):
+        return (f"En {mes(desde)} de {desde.year}" if hasta.day == _fin_de_mes(desde.year, desde.month).day
+                else f"En lo que va de {mes(desde)} de {desde.year}")
+    if (desde.year, desde.month) == (hasta.year, hasta.month):
+        return f"Del {desde.day} al {hasta.day} de {mes(desde)} de {desde.year}"
+    if desde.year == hasta.year:
+        return f"Del {desde.day} de {mes(desde)} al {hasta.day} de {mes(hasta)} de {desde.year}"
+    return f"Del {desde.day} de {mes(desde)} de {desde.year} al {hasta.day} de {mes(hasta)} de {hasta.year}"
+
+
+# Conteo contado en un párrafo corto: total, tramos, dependencias y estado.
+def _parrafo_conteo(q, acts, hoy=None):
+    hoy = hoy or hoy_mx()
+    n = len(acts)
+    acciones = q.get("acciones") or []
+    if len(acciones) == 1:
+        sujeto = _plural_accion(acciones[0], n)
+        nombre = _plural_accion(acciones[0], 2)
+    elif acciones:
+        por_acc = Counter(x for a in acts for x in a["acciones"] if x in acciones)
+        sujeto = (("actividad" if n == 1 else "actividades") + " (" +
+                  _lista_y([f"{v} {_plural_accion(k, v)}" for k, v in por_acc.most_common()]) + ")")
+        nombre = "actividades"
+    elif q["categorias"]:
+        sujeto = ("actividad" if n == 1 else "actividades") + " de " + " y ".join(_corto(c).lower() for c in q["categorias"])
+        nombre = "actividades"
+    else:
+        sujeto, nombre = ("actividad" if n == 1 else "actividades"), "actividades"
+    donde = ""
+    if q["proyectos"]:
+        donde += " en " + _lista_y(q["proyectos"])
+    if q["municipio"]:
+        donde += " en " + q["municipio_txt"]
+    elif q["estado"]:
+        donde += " en " + q["estado_txt"]
+    if q["dependencias"]:
+        donde += " con " + _lista_y(q["dependencias"])
+    verbo = "hubo" if q["hasta"] < hoy else ("hay programadas" if q["desde"] > hoy else "van")
+    frases = [f"{_periodo_en_palabras(q['desde'], q['hasta'], hoy)} {verbo} {n:,} {sujeto}{donde}."]
+
+    if n == 1:
+        a = acts[0]
+        lugar = ", ".join(x for x in (_titulo(a["municipio"]), _titulo(a["estado"])) if x)
+        frases.append(f"Fue el {a['fecha'].strftime('%d/%m/%Y')} en {a['proyecto']}" + (f", {lugar}" if lugar else "")
+                      + f": {a['actividad']}.")
+        return " ".join(frases)
+
+    proyectos = Counter(a["proyecto"].replace("OTRO", "otros proyectos") for a in acts).most_common()
+    if not q["proyectos"]:
+        if len(proyectos) == 1:
+            frases.append(f"Todas fueron en {proyectos[0][0]}.")
+        elif len(proyectos) == 2:
+            (p1, v1), (p2, v2) = proyectos
+            frases.append(f"Fueron {v1} en {p1} y {v2} en {p2}.")
+        else:
+            (p1, v1), *sig = proyectos[:3]
+            arranque = "La mayoría fueron en" if v1 * 2 > n else "Fueron sobre todo en"
+            frase = f"{arranque} {p1} ({v1}), seguido de " + _lista_y([f"{p} ({v})" for p, v in sig])
+            resto = proyectos[3:]
+            if resto:
+                nombres = [p for p, _ in resto[:4]] + (["otros"] if len(resto) > 4 else [])
+                cuantas = sum(v for _, v in resto)
+                frase += (f"; la otra se hizo en {nombres[0]}" if cuantas == 1 else
+                          f"; las otras {cuantas} se repartieron entre {_lista_y(nombres)}" if len(nombres) > 1 else
+                          f"; las otras {cuantas} fueron en {nombres[0]}")
+            frases.append(frase + ".")
+
+    deps = Counter()
+    for a in acts:
+        celda = N._sin_acentos(a["dependencias"].upper())
+        deps.update(c for c, pats in N._DEP_PATRONES.items()
+                    if c not in q["dependencias"] and any(p.search(celda) for p in pats))
+    deps = deps.most_common(2)
+    edos = Counter(_titulo(a["estado"]) for a in acts if a["estado"]).most_common()
+    partes = []
+    if deps:
+        partes.append(("Participaron sobre todo " if len(deps) > 1 else "Participó sobre todo ")
+                      + _lista_y([f"{d} ({v})" for d, v in deps]))
+    if edos and not (q["estado"] or q["municipio"]):
+        if len(edos) == 1:
+            partes.append(f"todas en {edos[0][0]}")
+        elif edos[0][1] > edos[1][1]:                       # solo si de verdad destaca (sin empate)
+            partes.append(f"el estado con más {nombre} fue {edos[0][0]} ({edos[0][1]})")
+    if partes:
+        texto = ", y ".join(partes) if len(partes) == 2 else partes[0]
+        frases.append(texto[0].upper() + texto[1:] + ".")
+
+    meses = Counter((a["fecha"].year, a["fecha"].month) for a in acts)
+    if len(meses) > 1:
+        (y, m), v = meses.most_common(1)[0]
+        frases.append(f"El mes con más fue {MESES[m - 1]} de {y} ({v}).")
+    return " ".join(frases)
+
+
 # Arma el texto de respuesta a partir de la pregunta interpretada.
 def redactar(q, acts):
     cab = _encabezado(q)
@@ -503,18 +631,7 @@ def redactar(q, acts):
         return f"No encontré actividades registradas.\n{cab}"
 
     if q["intencion"] == "contar":
-        texto = f"📊 {_plural(len(acts))}\n{cab}"
-        if not q["proyectos"] and len({a['proyecto'] for a in acts}) > 1:
-            conteo = Counter(a["proyecto"] for a in acts).most_common()
-            texto += "\nPor proyecto:\n" + "\n".join(f"• {k} = {v}" for k, v in conteo)
-        if len(q.get("acciones") or []) > 1:
-            conteo = Counter(x for a in acts for x in a["acciones"] if x in q["acciones"]).most_common()
-            texto += "\nPor acción:\n" + "\n".join(f"• {k} = {v}" for k, v in conteo)
-        meses = Counter((a["fecha"].year, a["fecha"].month) for a in acts)
-        if len(meses) > 1:
-            texto += "\nPor mes:\n" + "\n".join(f"• {MESES[m - 1].capitalize()} {y} = {v}"
-                                                  for (y, m), v in sorted(meses.items()))
-        return texto
+        return f"{_parrafo_conteo(q, acts, q.get('hoy'))}\n\n{cab}"
 
     if q["intencion"] == "resumen":
         proyectos = Counter(a["proyecto"] for a in acts)
@@ -590,6 +707,13 @@ def responder(texto, hoy=None, chat_id=None, natural=False):
     if natural and not (q["proyectos"] or q["dependencias"]) and not _es_de_agenda(t, hist):
         # «¿Cuántos estados tiene México?» trae palabras de agenda pero no lo es.
         return _general(t, hist) or "Ahorita no pude contestarte 😅 Intenta de nuevo en un momento."
+    # Preguntas abiertas: Tara consulta con herramientas; resúmenes y listas pedidas siguen como siempre.
+    if natural and not (q["intencion_explicita"] and q["intencion"] in ("resumen", "listar")):
+        r = tara_agente.responder(t, hist, hoy, filas)
+        if r:
+            if chat_id:
+                _ULTIMA[chat_id] = (time.time(), q)
+            return r
     if not q["entendido"]:
         # Haiku reescribe la pregunta con palabras que sí entiendo; las cuentas siguen siendo del código.
         previa = f"Conversación previa:\n{hist}\n\nPregunta: " if hist else ""
@@ -946,7 +1070,8 @@ def _partir(texto, limite=4000):
 def registrar(app, nucleo):
     global N
     N = nucleo
-    N._RUTAS_PUBLICAS.add("tara_resumen_diario")     # no pide contraseña: trae su propio secreto
+    tara_agente.N = nucleo
+    N._RUTAS_PUBLICAS.add("tara_resumen_diario")
 
     # La llama un programador externo cada mañana; manda la agenda del día a los chats autorizados.
     @app.route("/tara/resumen-diario", methods=["GET", "POST"])
