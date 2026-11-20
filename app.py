@@ -1099,6 +1099,7 @@ def procesar_agenda(texto):
         linea_principal = re.sub(r'(?i)^\s*del\s+Frente\s+\d+[\s,]*', '', linea_principal).strip()
         linea_principal = re.sub(r'(?i)\s*\|\s*(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,\s*)?F\d+(?:\s*(?:[-–,]|y)\s*F?\d+)*\s*$', '', linea_principal).strip()  # «| F4-F5» o «| MEX-QRO, F4-F5»
         linea_principal = re.sub(r'^[-–—\s]+', '', linea_principal).strip()
+        linea_principal = re.sub(r'(?i)^(?:tipo(?:\s+de\s+(?:actividad|solicitud))?|descripci[oó]n|actividad|asunto)\s*:\s*', '', linea_principal).strip()   # «Tipo: Reunión…» sin la etiqueta
         if linea_principal[:1].islower():
             linea_principal = linea_principal[0].upper() + linea_principal[1:]
         linea_principal = re.sub(r'\.$', '', linea_principal).strip()
@@ -1278,7 +1279,7 @@ def procesar_agenda(texto):
 
         # UBICACIONES MÚLTIPLES  (a) Punto: url   |   - Punto: url
         ubicaciones_multi = re.findall(
-            r'^\s*(?:[a-zA-Z][\)\.]|[-•])\s*(.+?):\s*(https?://\S+)',
+            r'^\s*(?:[a-zA-Z][\)\.]|[-•])\s*(?!\s*(?i:ubicaci[oó]n(?:es)?|link|liga|maps)\s*:)(.+?):\s*(https?://\S+)',   # «- Ubicación: url» no es un punto con nombre
             bloque, re.MULTILINE
         )
         # UBICACIONES POR CÓDIGO: "MQ-NOP-160: https://..." (una fila por nomenclatura)
