@@ -141,6 +141,7 @@
   .glb .cats div{display:flex;justify-content:space-between;gap:10px}
   .glb .cats div.act{font-weight:700;color:var(--text-strong)}
   .glb ul{list-style:none;margin-top:6px;border-top:1px solid var(--line-soft);padding-top:6px}
+  .glb .ult{font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
   .glb li{font-size:.68rem;line-height:1.35;margin-bottom:4px}
   .glb li span{color:var(--muted);font-variant-numeric:tabular-nums}
 
@@ -410,11 +411,11 @@ function color(n){
 function globo(m){
   const v=valor(m);
   const proys=Object.entries(m.proyectos).map(([k,n])=>'<span class="pc" style="background:'+((PROY[k]||PROY.OTRO)[1])+'">'+esc(k)+' '+n+'</span>').join('');
-  const cats=D.capas.filter(c=>c.tipo!=='sub'&&m.capas[c.clave]).map(c=>'<div'+(c.clave===CAPA?' class="act"':'')+'><span>'+esc(c.nombre)+'</span><b>'+num(m.capas[c.clave])+'</b></div>').join('');
-  const rec=(m.recientes[CAPA]||[]).map(a=>'<li><span>'+esc(a.fecha)+(a.hora?' '+esc(a.hora):'')+' · '+esc(a.proyecto)+'</span><br>'+esc(a.actividad)+'</li>').join('');
+  const cats=CAPA!=='todas'?'':D.capas.filter(c=>c.tipo!=='sub'&&m.capas[c.clave]).map(c=>'<div><span>'+esc(c.nombre)+'</span><b>'+num(m.capas[c.clave])+'</b></div>').join('');
+  const rec=CAPA==='todas'?'':(m.recientes[CAPA]||[]).map(a=>'<li><span>'+esc(a.fecha)+(a.hora?' '+esc(a.hora):'')+' · '+esc(a.proyecto)+'</span><br>'+esc(a.actividad)+'</li>').join('');
   return '<div class="glb"><h3>'+esc(m.municipio)+'</h3><div class="e">'+esc(m.estado)+'</div>'+
     '<div class="t">'+(CAPA==='todas'?'':esc(nombreCapa(CAPA))+': ')+num(v)+(v===1?' actividad':' actividades')+(CAPA==='todas'?'':' de '+num(m.n))+'</div>'+proys+
-    (cats?'<div class="cats">'+cats+'</div>':'')+(rec?'<ul>'+rec+'</ul>':'')+'</div>';
+    (cats?'<div class="cats">'+cats+'</div>':'')+(rec?'<ul><li class="ult">Últimas actividades</li>'+rec+'</ul>':'')+'</div>';
 }
 
 const tip=new maplibregl.Popup({closeButton:false,closeOnClick:false,className:'tip',offset:14});
