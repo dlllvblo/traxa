@@ -914,6 +914,15 @@ def detectar_tipo_propiedad(bloque, linea, nucleo_txt):
     return ""
 
 # Convierte el texto de una agenda en filas para Google Sheets (una por actividad).
+# Sufijo de tramo/frente al final del título: «| F4-F5», «| TMQ, F10», «| F4-F5 MEX-QRO», «| Frente 9», «| QSL», «| TQSL T1».
+_SUFIJO_FRENTE = re.compile(
+    r'\s*\|\s*(?:(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,?\s*)?(?:[Ff](?:rente)?|T)\s*\d+(?:\s*(?:-|–|,|y)\s*(?:[Ff](?:rente)?|T)?\s*\d+)*'
+    r'(?:\s*,?\s*[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?)?|[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?)\s*$')
+# Con coma o entre paréntesis: «…MQ-HUE-079-1, F1-F3», «… (Frente 9 - San Juan del Río, Querétaro)».
+_SUFIJO_FRENTE_COMA = re.compile(r'\s*(?:,\s*[Ff](?:rente)?\s*\d+(?:\s*(?:-|–|,|y)\s*(?:[Ff](?:rente)?)?\s*\d+)*'
+                                 r'|\(\s*[Ff](?:rente)?\s*\d+[^()]*\))\s*\.?\s*$')
+
+
 def procesar_agenda(texto):
     texto = _INVISIBLES_RE.sub('', texto)
     texto = re.sub(r'(?m)^([ \t]*)\*[ \t]+', r'\1- ', texto)
@@ -1097,7 +1106,8 @@ def procesar_agenda(texto):
         linea_principal = re.sub(r'(?i)^\s*buen[oa]s?\s+(?:noches|tardes|d[ií]as)[\s,\.]*', '', linea_principal).strip()
         linea_principal = re.sub(r'(?i)^\s*adicional\s+a\s+la\s+agenda[^,]*,\s*', '', linea_principal).strip()
         linea_principal = re.sub(r'(?i)^\s*del\s+Frente\s+\d+[\s,]*', '', linea_principal).strip()
-        linea_principal = re.sub(r'(?i)\s*\|\s*(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,\s*)?F\d+(?:\s*(?:[-–,]|y)\s*F?\d+)*\s*$', '', linea_principal).strip()  # «| F4-F5» o «| MEX-QRO, F4-F5»
+        linea_principal = re.sub(_SUFIJO_FRENTE, '', linea_principal).strip()  # «| F4-F5», «| TMQ, F10», «| F4-F5 MEX-QRO», «| QSL», «| TQSL T1»
+        linea_principal = re.sub(_SUFIJO_FRENTE_COMA, '', linea_principal).strip()  # «…, F1-F3» o «… (Frente 9 - …)»
         linea_principal = re.sub(r'^[-–—\s]+', '', linea_principal).strip()
         linea_principal = re.sub(r'(?i)^(?:tipo(?:\s+de\s+(?:actividad|solicitud))?|descripci[oó]n|actividad|asunto)\s*:\s*', '', linea_principal).strip()   # «Tipo: Reunión…» sin la etiqueta
         if linea_principal[:1].islower():
@@ -1152,7 +1162,7 @@ def procesar_agenda(texto):
                 num = frente_inline.group(1)
                 frente = type('_', (), {'group': lambda self, n: num})()
         if not frente:
-            frente_pipe = re.search(r'\|\s*(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,\s*)?F\.?\s*(\d+)\b', bloque, re.IGNORECASE)
+            frente_pipe = re.search(r'[|,(]\s*(?:[A-ZÁÉÍÓÚ]{2,6}(?:-[A-ZÁÉÍÓÚ]{2,6})?\s*,\s*)?F(?:rente)?\.?\s*(\d+)\b', bloque, re.IGNORECASE)
             if frente_pipe:
                 num = frente_pipe.group(1)
                 frente = type('_', (), {'group': lambda self, n: num})()
