@@ -86,19 +86,20 @@
 
   .span7{grid-column:span 7}.span5{grid-column:span 5}.span8{grid-column:span 8}.span4{grid-column:span 4}.span12{grid-column:span 12}
 
-  .load-row{display:grid;grid-template-columns:26px 116px 1fr 86px;align-items:center;gap:14px;padding:11px 0;border-top:1px solid var(--line-soft)}
+  /* Fila de proyecto: tramo arriba, barra a todo lo ancho abajo; número a la derecha */
+  .load-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;column-gap:14px;row-gap:8px;align-items:center;padding:13px 0;border-top:1px solid var(--line-soft)}
   .load-row:first-child{border-top:none}
-  .load-rank{font-family:'Noto Sans',sans-serif;font-size:.8rem;font-weight:600;color:var(--muted-2);text-align:center}
+  .load-rank{grid-row:1 / span 2;font-family:'Noto Sans',sans-serif;font-size:.8rem;font-weight:600;color:var(--muted-2);text-align:center}
   .load-row.lead .load-rank{color:var(--dorado)}
-  .load-id .code{font-family:'Noto Sans',sans-serif;font-weight:700;font-size:.82rem;letter-spacing:.03em;display:flex;align-items:center;gap:7px;color:var(--text)}
-  .load-id .code::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--c)}
-  .load-id .ruta{font-size:.66rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .load-bar{position:relative;height:22px;border-radius:7px;background:var(--board);border:1px solid var(--line);overflow:hidden}
+  .load-id{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+  .load-id .code{font-family:'Noto Sans',sans-serif;font-weight:700;font-size:.66rem;letter-spacing:.06em;color:#fff;background:var(--c);border-radius:6px;padding:3px 8px;flex:0 0 auto}
+  .load-id .ruta{font-family:'Patria','Noto Sans',sans-serif;font-weight:700;font-size:1rem;line-height:1.2;color:var(--text-strong)}
+  .load-bar{grid-column:2;position:relative;height:12px;border-radius:7px;background:var(--board);border:1px solid var(--line-soft);overflow:hidden}
   .load-bar .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:6px;
     background:linear-gradient(90deg,color-mix(in srgb,var(--c) 70%,#fff),var(--c));
     transition:width 1s cubic-bezier(.2,.8,.2,1)}
   .load-bar .fill::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 12px,rgba(255,255,255,.18) 12px 14px)}
-  .load-num{text-align:right;font-family:'Patria','Noto Sans',sans-serif}
+  .load-num{grid-row:1 / span 2;grid-column:3;text-align:right;font-family:'Patria','Noto Sans',sans-serif;min-width:64px}
   .load-num .n{font-size:1.35rem;font-weight:700;color:var(--c)}
   .load-num .pct{font-family:'Noto Sans',sans-serif;font-size:.6rem;color:var(--muted-2)}
   .empty{color:var(--muted-2);font-size:.8rem;padding:20px 0;text-align:center}
@@ -136,8 +137,8 @@
   @media (max-width:1040px){.kpi{grid-column:span 6}.span7,.span5,.span8,.span4{grid-column:span 12}}
   @media (max-width:560px){
     body{padding:12px}.kpi{grid-column:span 12}
-    .load-row{grid-template-columns:22px 1fr 70px;gap:10px}
-    .load-bar{display:none}
+    .load-row{grid-template-columns:22px minmax(0,1fr) auto;column-gap:10px}
+    .load-id .ruta{font-size:.9rem}
     .board-head,.board-row{grid-template-columns:46px 50px 1fr;}
     .board-row .st{display:none}.board-head span:last-child{display:none}
   }
@@ -262,7 +263,7 @@ const PROYECTOS=[
   {code:'TSNL', n:4, ruta:'Saltillo – Nuevo Laredo',  c:'#9A7B3C'},
   {code:'TIG',  n:5, ruta:'Irapuato – Guadalajara',   c:'#6E152E'},
   {code:'TMLM', n:6, ruta:'Mazatlán – Los Mochis',    c:'#2F8270'},
-  {code:'TQSLP',n:7, ruta:'Querétaro – San Luis P.',  c:'#B5772E'},
+  {code:'TQSLP',n:7, ruta:'Querétaro – San Luis Potosí',c:'#B5772E'},
   {code:'TSLPS',n:8, ruta:'San Luis Potosí – Saltillo',c:'#6E7C58'},
   {code:'TIX',  n:9, ruta:'Trolebús Ixtapaluca',       c:'#4F6D8A'},
   {code:'OTRO', n:'—', ruta:'Sin proyecto / no mapeado',c:'#A8957F'},
@@ -345,9 +346,9 @@ function renderLoad(){
     const row=document.createElement('div');
     row.className='load-row'+(i===0?' lead':'');row.style.setProperty('--c',p.c);
     row.innerHTML='<div class="load-rank">'+String(i+1).padStart(2,'0')+'</div>'+
-      '<div class="load-id"><div class="code">'+p.code+'</div><div class="ruta">'+p.n+'. '+p.ruta+'</div></div>'+
-      '<div class="load-bar"><div class="fill"></div></div>'+
-      '<div class="load-num"><div class="n">'+p.v+'</div><div class="pct">'+pct+'% del total</div></div>';
+      '<div class="load-id"><span class="code">'+p.code+'</span><span class="ruta">'+p.ruta+'</span></div>'+
+      '<div class="load-num"><div class="n">'+p.v+'</div><div class="pct">'+pct+'% del total</div></div>'+
+      '<div class="load-bar"><div class="fill"></div></div>';
     el.appendChild(row);
     requestAnimationFrame(()=>{row.querySelector('.fill').style.width=(p.v/max*100)+'%';});
   });
