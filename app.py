@@ -364,7 +364,7 @@ def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta, timeout=8)
         print(f"[haiku {etiqueta}] {type(e).__name__}: {e}", flush=True)
     return None
 
-def resumir_actividad(linea, detalle=""):
+def resumir_actividad(linea, detalle="", personal=""):
     """Resume la actividad en UNA línea técnica y concisa, combinando línea principal
        y campo Actividad si existe. Fallback: texto original."""
     base = (linea or "").strip()
@@ -373,12 +373,14 @@ def resumir_actividad(linea, detalle=""):
         base = f"{base}. {extra}" if base else extra
     if not base:
         return base
-    resumen = _llamar_haiku(SYSTEM_RESUMEN, f"Actividad: {base}", 120, 0.7, "resumen")
+    mensaje = f"Actividad: {base}" + (f"\nPersonal SEDATU: {personal}" if personal else "")
+    tope = 320 if personal else 220                    # los nombres del personal alargan la línea
+    resumen = _llamar_haiku(SYSTEM_RESUMEN, mensaje, 170 if personal else 120, 0.7, "resumen")
     # Si Haiku falló o pidió datos en vez de redactar, se usa el texto base.
     malo = (
         not resumen
         or "\n" in resumen
-        or len(resumen) > 220
+        or len(resumen) > tope
         or resumen.rstrip().endswith(":")
         or "?" in resumen
         or re.search(r'(?i)(necesito que|proporci|por favor|no puedo redactar|no cuento con|datos espec[ií]ficos)', resumen)
@@ -428,6 +430,10 @@ SYSTEM_RESUMEN = (
     "- Las personas nombradas (entre paréntesis, como 'propietario:' o 'titular', o con Sr./Sra./C.) son los "
     "propietarios o afectados, no quien ejecuta. Si hay propietario, refiérelo como "
     "'del C. X'; NUNCA deduzcas Sr. o Sra. por el nombre. Si el texto ya trae Sr. o Sra., respétalo.\n"
+    "- Si viene 'Personal SEDATU:', esos nombres son servidores públicos de SEDATU que ejecutaron la actividad "
+    "(NUNCA propietarios ni afectados): empieza la línea con ellos y el verbo según la acción, ej. "
+    "'Juan Pérez y Ana López, personal de SEDATU, se reunieron con el propietario del polígono MQ-SJR-130.' "
+    "Conserva los nombres textuales; en ese caso puedes usar hasta 35 palabras.\n"
     "- NUNCA pidas más datos, NUNCA hagas preguntas, NUNCA pidas aclaraciones.\n"
     "- Aunque la actividad sea muy escueta (ej. 'Caminamiento Ejidal'), redáctala "
     "igual en pasado con lo que haya (ej. 'Se realizó caminamiento ejidal'). "
@@ -923,6 +929,52 @@ _SUFIJO_FRENTE_COMA = re.compile(r'\s*(?:,\s*[Ff](?:rente)?\s*\d+(?:\s*(?:-|–|
                                  r'|\(\s*[Ff](?:rente)?\s*\d+[^()]*\))\s*\.?\s*$')
 
 
+# Ubicación pegada al final del TIPO DE SOLICITUD (ya va en NÚCLEO, MUNICIPIO y ESTADO).
+_UBIC_GUION_RE = re.compile(r'(?i)\s+[—–-]\s+(?:(?:el\s+)?ejidos?|n[uú]cleo\s+agrario|comunidad|municipios?\s+de|mpio\.?\s+de)\b.*$')
+_UBIC_PAREN_RE = re.compile(r'(?i)\s*\(\s*(?:municipios?\s+de|mpio\.?\s+de|ejidos?)\b[^()]*\)\s*$')
+_EDO_ABREV = {"hgo", "qro", "gto", "slp", "jal", "nl", "coah", "sin", "mex", "edomex", "edo mex", "edo de mex",
+              "edo de mexico", "estado de mexico", "cdmx", "tamps", "mich", "ver", "coahuila", "veracruz", "michoacan"}
+_LUGARES = {}
+
+def _clave_lugar(s):
+    s = re.sub(r'[.]', '', _sin_acentos(s or '').lower())
+    s = re.sub(r'^(?:municipios?\s+de|mpio\s+de|mpio)\s+', '', s.strip())
+    return re.sub(r'\s+', ' ', s).strip()
+
+def _es_estado(s):
+    if "edos" not in _LUGARES:
+        _LUGARES["edos"] = {_clave_lugar(p["NOM_ENT"]) for p in MUN_PROPS} | _EDO_ABREV
+    return _clave_lugar(s) in _LUGARES["edos"]
+
+def _es_municipio(s, corto=False):
+    if "muns" not in _LUGARES:
+        _LUGARES["muns"] = {_clave_lugar(p["NOM_MUN"]) for p in MUN_PROPS}
+    s = re.sub(r'(?i)^(?:del|en\s+el)\s+', '', s.strip())
+    if re.match(r'(?i)municipios?\b|mpio\b', s):
+        return True                                      # «Municipio (de) X» siempre es ubicación
+    k = _clave_lugar(s)
+    if not s[:1].isupper():
+        return False
+    return k in _LUGARES["muns"] or (corto and len(k) >= 4 and any(m.startswith(k + " ") for m in _LUGARES["muns"]))
+
+def _sin_ubicacion(txt):
+    """«… — Ejido La Pila (Municipio de San Luis Potosí)» o «…, Tula de Allende, Hidalgo» → sin la ubicación."""
+    t = _UBIC_PAREN_RE.sub('', txt.strip().rstrip('.')).strip()
+    t = _UBIC_GUION_RE.sub('', t).strip()
+    for _ in range(2):                                   # «…, Municipio X, Nuevo León»: estado y luego municipio
+        m = re.match(r'^(.*\S)\s*[,|]\s*([^,|]+?)\s*[,|]\s*([^,|]+?)\s*$', t)
+        if m and _es_estado(m.group(3)) and (_es_municipio(m.group(2), corto=True) or _es_estado(m.group(2))):
+            t = m.group(1)
+            continue
+        m = re.match(r'^(.*\S)\s*[,|]\s*([^,|]+?)\s*$', t)
+        if m and (_es_estado(m.group(2)) or _es_municipio(m.group(2))):
+            t = m.group(1)
+            continue
+        break
+    t = t.rstrip(' ,;-–—')
+    return t or txt                                      # si no queda nada, se deja como venía
+
+
 def procesar_agenda(texto):
     texto = _INVISIBLES_RE.sub('', texto)
     texto = re.sub(r'(?m)^([ \t]*)\*[ \t]+', r'\1- ', texto)
@@ -1118,7 +1170,7 @@ def procesar_agenda(texto):
         if segmento and segmento.lower() not in linea_principal.lower():
             linea_principal = f"{linea_principal} ({segmento})"
 
-        actividad_txt = linea_principal
+        actividad_txt = _sin_ubicacion(linea_principal)   # el resumen y el núcleo siguen usando la línea completa
 
         # CAMPO Actividad:
         actividad_field = re.search(r"Actividad:\s*(.*?)(?=\n\s*\w+:|$)", bloque, re.IGNORECASE | re.DOTALL)
@@ -1336,7 +1388,9 @@ def procesar_agenda(texto):
             r'(propietario: \1)',
             linea_resumen
         )
-        resumen_base = resumir_actividad(linea_resumen, actividad_detalle)
+        personal_m = re.search(r'(?im)^[ \t]*Personal\s+(?:de\s+)?SEDATU[ \t]*:[ \t]*(\S[^\n]*)', bloque)
+        personal = personal_m.group(1).strip().rstrip('.').strip() if personal_m else ""   # quién de SEDATU la ejecutó
+        resumen_base = resumir_actividad(linea_resumen, actividad_detalle, personal)
         noms_lbl = extraer_nomenclaturas(bloque)
         noms_inl = extraer_nomenclaturas_inline(linea_principal)
         noms_inl += [c for l in bloque.splitlines() if not re.sub(r'[\s,;]|\by\b', '', INLINE_NOM_RE.sub('', l))
