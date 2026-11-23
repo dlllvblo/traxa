@@ -154,9 +154,10 @@ def _agrupar(filas, campo, top=15):
         orden, top = sorted(c.items(), key=clave), 60
     else:
         orden = sorted(c.items(), key=lambda kv: (-kv[1], kv[0]))
-    mayor = max(c.items(), key=lambda kv: kv[1])
+    tope = max(c.values())
+    empatados = [k for k, v in orden if v == tope]           # todos los que empatan en el máximo
     return {"grupos": [{"valor": k, "n": v} for k, v in orden[:top]], "grupos_distintos": len(c),
-            "mayor": {"valor": mayor[0], "n": mayor[1]}}
+            "mayor": {"valor": ", ".join(empatados), "n": tope, "empates": len(empatados)}}
 
 
 def _corta(r):
