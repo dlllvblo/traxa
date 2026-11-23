@@ -174,7 +174,7 @@ def datos(desde, hasta, proyecto=""):
         p, g = N.MUN_PROPS[i], N.MUN_GEOMS[i]
         ordenadas = sorted(m["acts"], key=lambda a: (a[0], a[1]), reverse=True)
         fmt = lambda a: {"fecha": a[0].strftime("%d/%m/%Y"), "hora": a[1], "proyecto": a[2], "actividad": a[3]}
-        recientes = {"todas": [fmt(a) for a in ordenadas[:5]]}
+        recientes = {}                           # con «Todas» la ficha ya no muestra recientes
         for c in m["capas"]:                     # las 5 más recientes de cada capa
             recientes[c] = [fmt(a) for a in ordenadas if c in a[4]][:5]
         punto = g.representative_point()
