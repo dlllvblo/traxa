@@ -139,6 +139,7 @@
   .glb .pc{display:inline-block;font-size:.64rem;font-weight:700;color:#fff;border-radius:4px;padding:1px 5px;margin:0 4px 4px 0}
   .glb .cats{margin:6px 0;border-top:1px solid var(--line-soft);padding-top:6px;font-size:.68rem}
   .glb .cats div{display:flex;justify-content:space-between;gap:10px}
+  .glb .multi{font-size:.62rem;color:var(--muted);margin-top:5px;line-height:1.35}
   .glb ul{list-style:none;margin-top:6px;border-top:1px solid var(--line-soft);padding-top:6px}
   .glb .ult{font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
   .glb li{font-size:.68rem;line-height:1.35;margin-bottom:4px}
@@ -414,7 +415,7 @@ function globo(m){
   const rec=CAPA==='todas'?'':(m.recientes[CAPA]||[]).map(a=>'<li><span>'+esc(a.fecha)+(a.hora?' '+esc(a.hora):'')+' · '+esc(a.proyecto)+'</span><br>'+esc(a.actividad)+'</li>').join('');
   return '<div class="glb"><h3>'+esc(m.municipio)+'</h3><div class="e">'+esc(m.estado)+'</div>'+
     '<div class="t">'+(CAPA==='todas'?'':esc(nombreCapa(CAPA))+': ')+num(v)+(v===1?' actividad':' actividades')+(CAPA==='todas'?'':' de '+num(m.n))+'</div>'+proys+
-        (cats?'<div class="cats">'+cats+'</div>':'')+(rec?'<ul><li class="ult">Últimas actividades</li>'+rec+'</ul>':'')+'</div>';
+        (cats?'<div class="cats">'+cats+(m.multi?'<div class="multi">'+num(m.multi)+(m.multi===1?' actividad cuenta':' actividades cuentan')+' en más de una categoría.</div>':'')+'</div>':'')+(rec?'<ul><li class="ult">Últimas actividades</li>'+rec+'</ul>':'')+'</div>';
   }
 
 const tip=new maplibregl.Popup({closeButton:false,closeOnClick:false,className:'tip',offset:14});

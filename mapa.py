@@ -140,7 +140,7 @@ def _capas_de(f):
 # Lee el Sheet y arma el mapa para el rango (y proyecto) pedidos.
 def datos(desde, hasta, proyecto=""):
     inv = {v: k for k, v in N.mapa_proyectos.items()}
-    por_mun = defaultdict(lambda: {"n": 0, "proy": Counter(), "acts": [], "capas": Counter()})
+    por_mun = defaultdict(lambda: {"n": 0, "proy": Counter(), "acts": [], "capas": Counter(), "multi": 0})
     por_proy, no_ubicados, por_capa = Counter(), Counter(), Counter()
     total = ubicadas = 0
 
@@ -167,6 +167,8 @@ def datos(desde, hasta, proyecto=""):
             m["n"] += 1
             m["proy"][clave] += 1
             m["capas"].update(capas)
+            if sum(not c.startswith("sub|") for c in capas) > 1:
+                m["multi"] += 1                    # cuenta en más de una categoría
             m["acts"].append((d, _hora(f), clave, (f.get("TIPO DE SOLICITUD") or "").strip(), set(capas)))
 
     municipios = []
@@ -184,6 +186,7 @@ def datos(desde, hasta, proyecto=""):
             "proyectos": dict(m["proy"].most_common()),
             "capas": dict(m["capas"]),
             "recientes": recientes,
+            "multi": m["multi"],
         })
 
     return {

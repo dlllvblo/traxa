@@ -987,7 +987,7 @@ def procesar_agenda(texto):
                 break
 
     # --- BLOQUES ---
-    partes_texto = re.split(r"\n\s*\d+[\.-]\s*", texto)
+    partes_texto = re.split(r"\n\s*\d+[ \t]*[\.-]\s*", texto)   # «1.», «1-» y «1 .»
     encabezado = partes_texto[0]
     bloques = partes_texto[1:]
 
@@ -1339,7 +1339,9 @@ def procesar_agenda(texto):
         resumen_base = resumir_actividad(linea_resumen, actividad_detalle)
         noms_lbl = extraer_nomenclaturas(bloque)
         noms_inl = extraer_nomenclaturas_inline(linea_principal)
-        noms = noms_lbl + [c for c in noms_inl if c not in noms_lbl]
+        noms_inl += [c for l in bloque.splitlines() if not re.sub(r'[\s,;]|\by\b', '', INLINE_NOM_RE.sub('', l))
+                     for c in INLINE_NOM_RE.findall(l)]       # códigos solos en su renglón, sin etiqueta
+        noms = noms_lbl + [c for c in dict.fromkeys(noms_inl) if c not in noms_lbl]
         if ubic_por_codigo:
             resumen_final = integrar_parcelas(resumen_base, extraer_parcelas_sueltas(bloque))
         else:
