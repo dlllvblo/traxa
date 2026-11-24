@@ -1673,22 +1673,33 @@ def procesar_agendas(texto):
             filas.extend(procesar_agenda(parte.strip()))
     return filas
 
-# Conecta a Google Sheets con la cuenta de servicio (Render o credenciales.json).
-def _cliente_sheets():
-    creds_json = os.environ.get("GOOGLE_CREDENTIALS")
-    if creds_json:
-        creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=SCOPES)
-    else:
-        creds = Credentials.from_service_account_file("credenciales.json", scopes=SCOPES)
-    return gspread.Client(auth=creds)
+import threading
+_CLIENTE = None
+_CACHE = {"t": 0.0, "filas": None}
+_CACHE_SEG = 60                      # segundos que se reutiliza la lectura del Sheet
+_cache_lock = threading.Lock()
 
-# Lee la hoja principal como lista de diccionarios (vacía si no hay datos).
+# Conecta a Google Sheets con la cuenta de servicio; la conexión se reutiliza.
+def _cliente_sheets():
+    global _CLIENTE
+    if _CLIENTE is None:
+        creds_json = os.environ.get("GOOGLE_CREDENTIALS")
+        if creds_json:
+            creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=SCOPES)
+        else:
+            creds = Credentials.from_service_account_file("credenciales.json", scopes=SCOPES)
+        _CLIENTE = gspread.Client(auth=creds)
+    return _CLIENTE
+
+# Lee la hoja principal como lista de diccionarios; usa la copia en caché si tiene menos de 60 s.
 def _filas_hoja_principal():
-    valores = _cliente_sheets().open_by_key(SPREADSHEET_ID).get_worksheet(0).get_all_values()
-    if len(valores) < 2:
-        return []
-    headers = [h.replace("\n", " ").strip() for h in valores[0]]
-    return [dict(zip(headers, row)) for row in valores[1:]]
+    with _cache_lock:
+        if _CACHE["filas"] is None or time.time() - _CACHE["t"] > _CACHE_SEG:
+            valores = _cliente_sheets().open_by_key(SPREADSHEET_ID).get_worksheet(0).get_all_values()
+            headers = [h.replace("\n", " ").strip() for h in valores[0]] if valores else []
+            _CACHE["filas"] = [dict(zip(headers, row)) for row in valores[1:]]
+            _CACHE["t"] = time.time()
+        return [dict(f) for f in _CACHE["filas"]]   # copia: nadie altera la caché
 
 # Agrega las filas a la hoja principal (con consecutivo) y las replica en la del jefe.
 def subir_a_sheets(filas):
@@ -1714,6 +1725,7 @@ def subir_a_sheets(filas):
         datos.append(nueva_fila)
 
     worksheet.append_rows(datos, value_input_option="USER_ENTERED")
+    _CACHE["filas"] = None               # lo recién subido se ve en la siguiente consulta
 
      # --- Replicar actividades de TSNL/TIG/TQI al sheet del jefe ---
     filas_jefe = [f for f in filas if f.get("PROYECTO FERROVIARIO", "") in PROYECTOS_JEFE]
