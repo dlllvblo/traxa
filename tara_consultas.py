@@ -51,8 +51,8 @@ ESTADOS = {
 
 AYUDA = (
     "Hola, soy Tara y puedo ayudarte con:\n\n"
-    "📤📅 Subir la agenda del día, solamente reenvíame el mensaje tal cual y me encargo.\n\n"
-    "🚄🧐 Consultar la agenda de cualquier tramo, periodo, estado o municipio:\n"
+    "Subir la agenda del día, solamente reenvíame el mensaje tal cual y me encargo.\n\n"
+    "Consultar la agenda de cualquier tramo, periodo, estado o municipio:\n"
     "• Qué actividades hay (hoy, mañana, una fecha o un rango de fechas)\n"
     "• Lo que quieras saber de la agenda: cuándo fue la última asamblea en un ejido, qué pasó con un polígono, qué tramo lleva más firmas, cómo vamos contra el mes pasado…\n"
     "• Cuántas hubo de un tipo (firmas, sensibilizaciones, levantamientos…), por mes o con una dependencia\n"
@@ -119,9 +119,9 @@ _RE_CHARLA = re.compile(
     r"buen trabajo|eres la mejor|jaja\w*|adios|bye|hasta (luego|manana)|nos vemos|de nada)"
     r"( tara)?( muchas gracias| gracias)?")
 _RESPALDO_CHARLA = {
-    "gracias": ["¡Con gusto! Aquí estoy para lo que necesites 😊", "¡De nada! Cualquier cosa de la agenda, me dices.",
-                "¡Para eso estoy! 🙌"],
-    "saludo": ["¡Hola! ¿Qué necesitas saber de la agenda?", "¡Hola! 👋 Pregúntame lo que quieras de la agenda."],
+    "gracias": ["¡Con gusto! Aquí estoy para lo que necesites.", "¡De nada! Cualquier cosa de la agenda, me dices.",
+                "¡Para eso estoy!"],
+    "saludo": ["¡Hola! ¿Qué necesitas saber de la agenda?", "¡Hola! Pregúntame lo que quieras de la agenda."],
     "otro": ["¡Va! Si necesitas algo más de la agenda, aquí sigo."],
 }
 
@@ -635,13 +635,13 @@ def redactar(q, acts):
 
     if q["intencion"] == "resumen":
         proyectos = Counter(a["proyecto"] for a in acts)
-        partes = [f"📋 Resumen · {_etiqueta_periodo(q['desde'], q['hasta'])}{q['nota_periodo']}\n"
+        partes = [f"Resumen · {_etiqueta_periodo(q['desde'], q['hasta'])}{q['nota_periodo']}\n"
                   f"{_plural(len(acts))} en {len(proyectos)} proyecto{'s' if len(proyectos) != 1 else ''}"]
         if "\n" in cab:
             partes[0] += "\n" + cab.split("\n", 1)[1]    # filtros, si los hay
 
         # Por proyecto, con el desglose de qué se hizo en cada uno.
-        bloque = ["🚆 Por proyecto"]
+        bloque = ["Por proyecto"]
         for clave, total in proyectos.most_common():
             cats = Counter(_corto(c) for a in acts if a["proyecto"] == clave for c in a["cats"])
             bloque.append(f"• {clave}: {total}")
@@ -651,15 +651,15 @@ def redactar(q, acts):
 
         cats = Counter(_corto(c) for a in acts for c in a["cats"])
         if cats:
-            partes.append(_bloque("🗂 Por tipo de actividad", cats,
+            partes.append(_bloque("Por tipo de actividad", cats,
                                   sum(1 for a in acts if not a["cats"]), "Sin clasificar"))
         edos = Counter(_titulo(a["estado"]) for a in acts if a["estado"])
         if edos:
-            partes.append(_bloque("📍 Por estado", edos,
+            partes.append(_bloque("Por estado", edos,
                                   sum(1 for a in acts if not a["estado"]), "Sin ubicación"))
         return "\n\n".join(partes)
 
-    lineas = [f"🗓 {_plural(len(acts))}", cab]
+    lineas = [f"{_plural(len(acts))}", cab]
     dia = None
     for a in acts[:MAX_LISTA]:
         if a["fecha"] != dia:
@@ -702,11 +702,11 @@ def responder(texto, hoy=None, chat_id=None, natural=False):
     try:
         q = interpretar(t, filas, hoy)
     except FechaInvalida:
-        return "Esa fecha no existe 🤔 Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
+        return "Esa fecha no existe. Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
     q = _heredar(q, chat_id, t)
     if natural and not (q["proyectos"] or q["dependencias"]) and not _es_de_agenda(t, hist):
         # «¿Cuántos estados tiene México?» trae palabras de agenda pero no lo es.
-        return _general(t, hist) or "Ahorita no pude contestarte 😅 Intenta de nuevo en un momento."
+        return _general(t, hist) or "Ahorita no pude contestarte. Intenta de nuevo en un momento."
     # Preguntas abiertas: Tara consulta con herramientas; resúmenes y listas pedidas siguen como siempre.
     if natural and not (q["intencion_explicita"] and q["intencion"] in ("resumen", "listar")):
         r = tara_agente.responder(t, hist, hoy, filas)
@@ -720,7 +720,7 @@ def responder(texto, hoy=None, chat_id=None, natural=False):
         nueva = N._llamar_haiku(SYSTEM_REESCRIBIR, previa + t, 80, 0, "tara")
         if natural and nueva and nueva.strip().upper() == "NO":
             # No es de la agenda: plática libre.
-            return _general(t, hist) or "Ahorita no pude contestarte 😅 Intenta de nuevo en un momento."
+            return _general(t, hist) or "Ahorita no pude contestarte. Intenta de nuevo en un momento."
         if nueva and nueva.strip().upper() != "NO" and len(nueva) < 200 and "\n" not in nueva.strip():
             try:
                 q = interpretar(nueva.strip(), filas, hoy)
@@ -864,12 +864,12 @@ def atender(chat_id, texto):
         respuesta = responder(texto, chat_id=chat_id, natural=True)
     except Exception:
         print(traceback.format_exc(), flush=True)
-        respuesta = "❌ No pude consultar el Sheet en este momento. Intenta de nuevo en un minuto."
+        respuesta = "No pude consultar el Sheet en este momento. Intenta de nuevo en un minuto."
     _recordar(chat_id, "Usuario", texto)
     if isinstance(respuesta, dict):                     # gráfica: foto con pie de texto
         _recordar(chat_id, "Tara", "[gráfica] " + respuesta["pie"])
         if not _enviar_foto(chat_id, respuesta["png"], respuesta["pie"]):
-            N.telegram_enviar(chat_id, "No pude enviar la gráfica 😕 Intenta de nuevo en un momento.")
+            N.telegram_enviar(chat_id, "No pude enviar la gráfica. Intenta de nuevo en un momento.")
         return True
     _recordar(chat_id, "Tara", respuesta)
     for parte in _partir(respuesta):
@@ -889,13 +889,13 @@ def _grafica(texto, hoy, chat_id):
     try:
         q = interpretar(texto, filas, hoy)
     except FechaInvalida:
-        return "Esa fecha no existe 🤔 Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
+        return "Esa fecha no existe. Escríbela como dd/mm/aaaa, por ejemplo 12/11/2026."
     propia = (q["con_periodo"] or q["proyectos"] or q["estado"] or q["municipio"] or q["categorias"]
               or q["acciones"] or q["dependencias"])
     if not propia:
         previa = _ULTIMA.get(chat_id)
         if not previa or time.time() - previa[0] > HIST_MINUTOS * 60:
-            return ("¿De qué quieres la gráfica? 📊 Pregúntame primero algo como «¿cuántas reuniones con RAN "
+            return ("¿De qué quieres la gráfica? Pregúntame primero algo como «¿cuántas reuniones con RAN "
                     "en octubre?» y luego pídeme la gráfica, o dímelo junto: «gráfica de octubre por proyecto».")
         q = previa[1]
     acts = filtrar(q, filas)
@@ -930,7 +930,7 @@ def _grafica(texto, hoy, chat_id):
                        eje in ("día", "mes"))
     except ImportError:
         return "No puedo hacer gráficas todavía: falta instalar matplotlib en el servidor."
-    pie = f"📊 {titulo}\nPeriodo: {periodo}" + ("\n" + filtros[0] if filtros else "") + f"\nTotal: {_plural(len(acts))}"
+    pie = f"{titulo}\nPeriodo: {periodo}" + ("\n" + filtros[0] if filtros else "") + f"\nTotal: {_plural(len(acts))}"
     return {"png": png, "pie": pie}
 
 
@@ -1080,7 +1080,7 @@ def registrar(app, nucleo):
         if not secreto or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), secreto):
             return "", 403
         try:
-            texto = "☀️ Buenos días. Agenda de hoy:\n\n" + responder("que hay hoy")
+            texto = "Buenos días. Agenda de hoy:\n\n" + responder("que hay hoy")
         except Exception:
             print(traceback.format_exc(), flush=True)
             return jsonify({"error": "No se pudo leer el Sheet"}), 500

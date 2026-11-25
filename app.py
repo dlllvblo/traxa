@@ -1736,13 +1736,57 @@ def _ultimo_consecutivo(columna):
     return max((int(v) for v in columna[1:] if str(v).strip().isdigit()), default=0)
 
 
+# Clave para reconocer una actividad repetida: fecha y hora, proyecto, tipo, ubicación y núcleo (sin el resumen de Haiku).
+def _clave_dup(f):
+    fh = re.sub(r'\s+', ' ', str(f.get("FECHA Y HORA", ""))).strip().lower().replace(" hrs", "")
+    return (fh, _norm(f.get("PROYECTO FERROVIARIO", "")), _norm(f.get("TIPO DE SOLICITUD", "")),
+            str(f.get("UBICACIÓN", "")).strip(), _norm(f.get("NÚCLEO AGRARIO", "")))
+
+
+# Revisa las filas antes de subirlas: avisa de las que ya están en el Sheet y de datos faltantes (no quita nada).
+def validar_filas(filas):
+    try:
+        existentes = {_clave_dup(f) for f in _filas_hoja_principal()}
+    except Exception as e:
+        print(f"[validar] No pude leer el Sheet: {e}", flush=True)
+        existentes = set()
+    hoy = datetime.now(MX).date()
+    repetidas, avisos = [], []
+    for f in filas:
+        fh = str(f.get("FECHA Y HORA", "")).strip()
+        cual = f"{fh or 'sin fecha'} · {str(f.get('TIPO DE SOLICITUD', ''))[:60]}"
+        k = _clave_dup(f)
+        if k in existentes:
+            repetidas.append(cual)
+        existentes.add(k)                                 # también detecta repetidas dentro de la misma agenda
+        faltas = []
+        m_fecha = re.match(r'(\d{1,2}/\d{1,2}/\d{4})', fh)
+        if not m_fecha:
+            faltas.append("sin fecha")
+        else:
+            if not re.search(r'\d{1,2}:\d{2}|por confirmar', fh, re.IGNORECASE):
+                faltas.append("sin hora")
+            try:
+                if abs((datetime.strptime(m_fecha.group(1), "%d/%m/%Y").date() - hoy).days) > 30:
+                    faltas.append("fecha a más de 30 días de hoy")
+            except ValueError:
+                faltas.append("fecha inválida")
+        if not f.get("ESTADO") and not f.get("MUNICIPIO"):
+            faltas.append("sin estado ni municipio")
+        if faltas:
+            avisos.append(f"{cual} → {', '.join(faltas)}")
+    return repetidas, avisos
+
+
 # Agrega las filas a la hoja principal (con consecutivo) y las replica en la del jefe.
-def subir_a_sheets(filas):
+# «revision» (opcional) recibe las actividades que ya estaban en el Sheet y los avisos.
+def subir_a_sheets(filas, revision=None):
     with _subir_lock:
-        return _subir_a_sheets(filas)
+        return _subir_a_sheets(filas, {} if revision is None else revision)
 
 
-def _subir_a_sheets(filas):
+def _subir_a_sheets(filas, revision):
+    revision["repetidas"], revision["avisos"] = validar_filas(filas)
     client = _cliente_sheets()
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
     worksheet = spreadsheet.get_worksheet(0)
@@ -1804,8 +1848,10 @@ def procesar():
         filas = procesar_agendas(texto)
         if not filas:
             return jsonify({"error": "No se encontraron actividades en el texto"}), 400
-        total = subir_a_sheets(filas)
-        return jsonify({"success": True, "filas": filas, "total": total})
+        rev = {}
+        total = subir_a_sheets(filas, rev)
+        return jsonify({"success": True, "filas": filas, "total": total,
+                        "repetidas": rev.get("repetidas", []), "avisos": rev.get("avisos", [])})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1830,22 +1876,27 @@ def share():
     try:
         filas = procesar_agendas(texto)
         if not filas:
-            return "<h2>⚠️ No se encontraron actividades en el texto compartido</h2>", 400
-        total = subir_a_sheets(filas)
+            return "<h2>No se encontraron actividades en el texto compartido</h2>", 400
+        rev = {}
+        total = subir_a_sheets(filas, rev)
         resumen_html = "".join(
             f"<li>{f['FECHA Y HORA']} — {f['TIPO DE SOLICITUD'][:80]}</li>" for f in filas
         )
+        if rev["repetidas"]:
+            resumen_html += f"<p>{len(rev['repetidas'])} ya estaban en el Sheet (se subieron de todos modos).</p>"
+        if rev["avisos"]:
+            resumen_html += "<p>Revisa:</p><ul>" + "".join(f"<li>{a}</li>" for a in rev["avisos"]) + "</ul>"
         return f"""
         <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
         <style>body{{font-family:sans-serif;padding:24px;background:#691B4F;color:white}}
         .card{{background:white;color:#333;border-radius:16px;padding:20px}}</style></head>
         <body><div class="card">
-        <h2>✅ {total} actividad(es) subida(s) a Sheets</h2>
+        <h2>{total} actividad(es) subida(s) a Sheets</h2>
         <ul>{resumen_html}</ul>
         </div></body></html>
         """
     except Exception as e:
-        return f"<h2>❌ Error: {e}</h2>", 500
+        return f"<h2>Error: {e}</h2>", 500
 
 
 # TARA (TELEGRAM AGENDA READER APP) — Webhook para recibir mensajes de Telegram y subirlos a Sheets
@@ -1887,7 +1938,7 @@ def avisar_admin(tipo, texto):
     if not chat or ahora - _ultimo_aviso.get(tipo, 0) < 1800:
         return
     _ultimo_aviso[tipo] = ahora
-    threading.Thread(target=telegram_enviar, args=(chat, f"⚠️ TRAXA: {texto}"), daemon=True).start()   # no frena la agenda
+    threading.Thread(target=telegram_enviar, args=(chat, f"TRAXA: {texto}"), daemon=True).start()   # no frena la agenda
 
 
 # Webhook de Telegram: valida, evita duplicados y junta mensajes partidos.
@@ -1982,7 +2033,7 @@ def _procesar_buffer(chat_id):
     for h in [h for h, t in _agendas_recientes.items() if (ahora - t).total_seconds() > 600]:
         del _agendas_recientes[h]
     if firma in _agendas_recientes:
-        telegram_enviar(chat_id, "⚠️ Esa misma agenda ya la subí hace un momento; no la dupliqué.")
+        telegram_enviar(chat_id, "Esa misma agenda ya la subí hace un momento; no la dupliqué.")
         return
     _agendas_recientes[firma] = ahora
 
@@ -1991,7 +2042,8 @@ def _procesar_buffer(chat_id):
         if not filas:
             telegram_enviar(chat_id, "No encontré actividades en ese texto.")
             return
-        total = subir_a_sheets(filas)
+        rev = {}
+        total = subir_a_sheets(filas, rev)
         # Actividades por proyecto, en el orden en que llegaron
         por_proyecto = {}
         for f in filas:
@@ -2005,10 +2057,10 @@ def _procesar_buffer(chat_id):
             and not f.get("ESTADO", "").strip()
         ]
         if len(por_proyecto) == 1:
-            msg = f"✅ Subí {total} actividad(es) a Sheets ({next(iter(por_proyecto))})."
+            msg = f"Subí {total} actividad(es) a Sheets ({next(iter(por_proyecto))})."
         else:
             detalle_proy = "\n".join(f"• {p}: {n}" for p, n in por_proyecto.items())
-            msg = (f"✅ Subí {total} actividades de {len(por_proyecto)} proyectos a Sheets:\n"
+            msg = (f"Subí {total} actividades de {len(por_proyecto)} proyectos a Sheets:\n"
                    f"{detalle_proy}")
         if sin_geo:
             claves = {v: k for k, v in mapa_proyectos.items()}
@@ -2019,11 +2071,18 @@ def _procesar_buffer(chat_id):
                 + f"{f.get('TIPO DE SOLICITUD','')[:40]}"
                 for f in sin_geo
             )
-            msg += (f"\n\n⚠️ {len(sin_geo)} sin ubicación (link roto o inválido). "
+            msg += (f"\n\n{len(sin_geo)} sin ubicación (link roto o inválido). "
                     f"Llena ESTADO/MUNICIPIO a mano:\n{detalle}")
+        if rev["repetidas"]:
+            msg += (f"\n\n{len(rev['repetidas'])} ya estaban en el Sheet (las subí de todos modos):\n"
+                    + "\n".join(f"• {x}" for x in rev["repetidas"]))
+        otros = [re.sub(r' → $', '', re.sub(r',? ?sin estado ni municipio', '', a)) for a in rev["avisos"]]   # la ubicación ya va arriba
+        otros = [a for a in otros if " → " in a]
+        if otros:
+            msg += "\n\nRevisa:\n" + "\n".join(f"• {a}" for a in otros)
         telegram_enviar(chat_id, msg)
     except Exception as e:
-        telegram_enviar(chat_id, f"❌ Error: {e}")
+        telegram_enviar(chat_id, f"Error: {e}")
 
 # API AGENDA
 

@@ -356,7 +356,7 @@ async function cargar(){
     sc.innerHTML='';
     const lista=j.sin_clasificar||[];
     if(!lista.length){
-      sc.innerHTML='<div class="empty">Todo clasificado en esta ventana ✅</div>';
+      sc.innerHTML='<div class="empty">Todo clasificado en esta ventana.</div>';
     }else{
       const freq={};
       lista.forEach(t=>{const k=(t||'').trim()||'(vacío)';freq[k]=(freq[k]||0)+1;});

@@ -308,16 +308,18 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    mostrarStatus(
-                        `✅ ${data.total} registro${data.total !== 1 ? 's' : ''} agregado${data.total !== 1 ? 's' : ''} correctamente a Google Sheets.`,
-                        'success'
-                    );
+                    let msg = `${data.total} registro${data.total !== 1 ? 's' : ''} agregado${data.total !== 1 ? 's' : ''} correctamente a Google Sheets.`;
+                    const repetidas = data.repetidas || [], avisos = data.avisos || [];
+                    if (repetidas.length) msg += `\n\n${repetidas.length} ya estaban en el Sheet (se subieron de todos modos):\n• ` + repetidas.join('\n• ');
+                    if (avisos.length) msg += `\n\nRevisa:\n• ` + avisos.join('\n• ');
+                    mostrarStatus(msg, 'success');
+                    document.getElementById('status').style.whiteSpace = 'pre-line';   // respeta los saltos de línea
                     document.getElementById('texto').value = '';
                 } else {
-                    mostrarStatus(`❌ Error: ${data.error}`, 'error');
+                    mostrarStatus(`Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                mostrarStatus('❌ No se pudo conectar con el servidor.', 'error');
+                mostrarStatus('No se pudo conectar con el servidor.', 'error');
             }
 
             btn.disabled = false;
