@@ -353,6 +353,7 @@ def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta, timeout=8)
             json={
                 "model": HAIKU_MODEL,
                 "max_tokens": max_tokens,
+                "thinking": {"type": "disabled"},          # Haiku 5.5 piensa por defecto y se come los max_tokens
                 "system": system,
                 "messages": [{"role": "user", "content": mensaje}],
             },
