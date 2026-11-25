@@ -1740,22 +1740,26 @@ def _filas_hoja_principal():
             _CACHE["t"] = time.time()
         return [dict(f) for f in _CACHE["filas"]]   # copia: nadie altera la caché
 
+_subir_lock = threading.Lock()       # una subida a la vez: el consecutivo no se repite
+
+
+# Último número de la columna A (el mayor, aunque la hoja esté ordenada distinto).
+def _ultimo_consecutivo(columna):
+    return max((int(v) for v in columna[1:] if str(v).strip().isdigit()), default=0)
+
+
 # Agrega las filas a la hoja principal (con consecutivo) y las replica en la del jefe.
 def subir_a_sheets(filas):
+    with _subir_lock:
+        return _subir_a_sheets(filas)
+
+
+def _subir_a_sheets(filas):
     client = _cliente_sheets()
     spreadsheet = client.open_by_key(SPREADSHEET_ID)
     worksheet = spreadsheet.get_worksheet(0)
     headers = worksheet.row_values(1)
-    columna_a = worksheet.col_values(1)
-
-    ultimo = 0
-    if len(columna_a) > 1:
-        try:
-            ultimo = int(columna_a[-1])
-        except:
-            ultimo = 0
-
-    inicio = ultimo + 1
+    inicio = _ultimo_consecutivo(worksheet.col_values(1)) + 1
     datos = []
     for i, fila in enumerate(filas):
         nueva_fila = [inicio + i]
@@ -1782,16 +1786,7 @@ def _subir_a_sheet_jefe(client, filas_jefe):
     spreadsheet_jefe = client.open_by_key(SPREADSHEET_ID_JEFE)
     ws_jefe = spreadsheet_jefe.get_worksheet(0)
     headers_jefe = ws_jefe.row_values(1)
-    columna_a_jefe = ws_jefe.col_values(1)
-
-    ultimo_jefe = 0
-    if len(columna_a_jefe) > 1:
-        try:
-            ultimo_jefe = int(columna_a_jefe[-1])
-        except:
-            ultimo_jefe = 0
-
-    inicio_jefe = ultimo_jefe + 1
+    inicio_jefe = _ultimo_consecutivo(ws_jefe.col_values(1)) + 1
     datos_jefe = []
     for i, fila in enumerate(filas_jefe):
         nueva_fila = [inicio_jefe + i]
