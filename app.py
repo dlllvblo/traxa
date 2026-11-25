@@ -1108,11 +1108,11 @@ def procesar_agenda(texto):
             z1 = hora_doble_match.group(3).strip()
             h2 = _hora_24(hora_doble_match.group(4), hora_doble_match.group(5), None)
             z2 = hora_doble_match.group(6).strip()
-            hora_txt = f"{h1} hrs {z1}\n{h2} hrs {z2}"
+            hora_txt = f"{h1} (Hora {z1}) / {h2} (Hora {z2})"   # todo en un renglón
         elif hora_doble_y_match:
             h1 = _hora_24(hora_doble_y_match.group(1), hora_doble_y_match.group(2), None)
             h2 = _hora_24(hora_doble_y_match.group(3), hora_doble_y_match.group(4), None)
-            hora_txt = f"{h1} hrs y {h2} hrs"
+            hora_txt = f"{h1} y {h2}"
         elif match_hora:
             hora_txt = _hora_24(match_hora.group(1), match_hora.group(2), match_hora.group(3))
         elif hora_label_match:
@@ -1605,7 +1605,7 @@ def procesar_agenda(texto):
                     (particular.group(1) or particular.group(2) or "").strip()
                     if particular else ""
                 ),
-                "FECHA Y HORA": f"{fecha} {hora_txt}",
+                "FECHA Y HORA": f"{fecha} {hora_txt}".strip(),   # sin espacio al final si no hay hora
                 "DEPENDENCIAS PARTICIPANTES": (
                     asistentes.group(1).strip().rstrip('.') if asistentes else ""
                 ),
@@ -1656,7 +1656,7 @@ def procesar_agenda(texto):
             texto_min = re.sub(r'\s*\(\d{1,2}:\d{2}\s*(?:hrs?)?\)', '', minuta_txt).strip()
             fila_min = armar_fila(url, estado_geo, municipio_geo, texto_min)
             fila_min["TIPO DE SOLICITUD"] = homologar_tipo(texto_min)
-            fila_min["FECHA Y HORA"] = f"{fecha} {hora_min}"
+            fila_min["FECHA Y HORA"] = f"{fecha} {hora_min}".strip()
             filas.append(fila_min)
 
     return filas
