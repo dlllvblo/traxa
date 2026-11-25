@@ -17,6 +17,8 @@ from shapely.geometry import shape, Point
 from shapely.strtree import STRtree
 import unicodedata
 import difflib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 # Sesión firmada; sin SECRET_KEY en Render las sesiones se pierden en cada reinicio.
@@ -364,6 +366,9 @@ def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta, timeout=8)
         print(f"[haiku {etiqueta}] {type(e).__name__}: {e}", flush=True)
     return None
 
+_RES_LOCAL = threading.local()       # por hilo: resúmenes pendientes (ensayo) y ya redactados
+
+
 def resumir_actividad(linea, detalle="", personal=""):
     """Resume la actividad en UNA línea técnica y concisa, combinando línea principal
        y campo Actividad si existe. Fallback: texto original."""
@@ -373,6 +378,13 @@ def resumir_actividad(linea, detalle="", personal=""):
         base = f"{base}. {extra}" if base else extra
     if not base:
         return base
+    clave = (linea, detalle, personal)
+    if getattr(_RES_LOCAL, "pendientes", None) is not None:   # ensayo: solo se anota lo que se pediría
+        _RES_LOCAL.pendientes.append(clave)
+        return base
+    listos = getattr(_RES_LOCAL, "listos", None)
+    if listos and clave in listos:                             # ya lo redactó Haiku en paralelo
+        return listos[clave]
     mensaje = f"Actividad: {base}" + (f"\nPersonal SEDATU: {personal}" if personal else "")
     tope = 320 if personal else 220                    # los nombres del personal alargan la línea
     resumen = _llamar_haiku(SYSTEM_RESUMEN, mensaje, 170 if personal else 120, 0.7, "resumen")
@@ -1671,10 +1683,26 @@ def procesar_agendas(texto):
         else:
             actual.append(linea)
     partes.append('\n'.join(actual))
-    filas = []
-    for parte in partes:
-        if parte.strip():
-            filas.extend(procesar_agenda(parte.strip()))
+    textos = [p.strip() for p in partes if p.strip()]
+    # 1) Ensayo sin Haiku: junta lo que hay que resumir (las ligas de Maps quedan en caché).
+    _RES_LOCAL.pendientes = []
+    try:
+        for t in textos:
+            procesar_agenda(t)
+        pendientes = list(dict.fromkeys(_RES_LOCAL.pendientes))
+    finally:
+        _RES_LOCAL.pendientes = None
+    # 2) Haiku redacta todos en paralelo, 6 a la vez.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        listos = dict(zip(pendientes, pool.map(lambda c: resumir_actividad(*c), pendientes)))
+    # 3) Pasada real: usa los resúmenes ya listos.
+    _RES_LOCAL.listos = listos
+    try:
+        filas = []
+        for t in textos:
+            filas.extend(procesar_agenda(t))
+    finally:
+        _RES_LOCAL.listos = None
     return filas
 
 import threading
