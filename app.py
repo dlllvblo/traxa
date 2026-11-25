@@ -78,35 +78,18 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# MAPA PROYECTOS
-mapa_proyectos = {
-        'TAP':   '1. AIFA - PACHUCA',
-        'TIG':   '5. IRAPUATO - GUADALAJARA',
-        'TMLM':  '6. MAZATLÁN - LOS MOCHIS',
-        'TMQ':   '2. MÉXICO - QUERÉTARO',
-        'TQI':   '3. QUERÉTARO - IRAPUATO',
-        'TQSLP': '7. QUERÉTARO - SAN LUIS POTOSÍ',
-        'TSNL':  '4. SALTILLO - NUEVO LAREDO',
-        'TSLPS': '8. SAN LUIS POTOSÍ - SALTILLO',
-        'TIX':   '9. TROLEBÚS IXTAPALUCA',
-    }
+# MAPA PROYECTOS: el catálogo vive en proyectos.json (clave → nombre, Sheet del jefe, director, alias…)
+with open(os.path.join(os.path.dirname(__file__), "proyectos.json"), encoding="utf-8") as _f:
+    PROYECTOS = json.load(_f)
+mapa_proyectos = {clave: p["nombre"] for clave, p in PROYECTOS.items()}
 
 
 # HOJAS
 SPREADSHEET_ID_JEFE = os.environ.get("SPREADSHEET_ID_JEFE", "")
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
 
-PROYECTOS_JEFE = {
-    mapa_proyectos["TSNL"],
-    mapa_proyectos["TIG"],
-    mapa_proyectos["TQI"],
-}
-
-DIRECTOR_TRAMO = {
-    mapa_proyectos["TSNL"]: "ING. LUIS HUMBERTO QUIROZ ESCAMILLA",
-    mapa_proyectos["TIG"]:  "ARQ. MIGUEL ÁNGEL SÁNCHEZ CORTES",
-    mapa_proyectos["TQI"]:  "ING. MARTÍN FLORES BAILÓN",
-}
+PROYECTOS_JEFE = {p["nombre"] for p in PROYECTOS.values() if p.get("sheet_jefe")}
+DIRECTOR_TRAMO = {p["nombre"]: p["director"] for p in PROYECTOS.values() if p.get("director")}
 
 # Normaliza texto para comparar: sin número inicial, acentos, guiones ni mayúsculas.
 def _norm(s):
@@ -180,9 +163,8 @@ _EMP_PATRONES = {canon: [re.compile(_dep_pat(al)) for al in als]
 
 _PROY_POR_CLAVE  = {_norm(k): v for k, v in mapa_proyectos.items()}
 _PROY_POR_NOMBRE = {frozenset(_norm(v).split()): v for v in mapa_proyectos.values()}
-_ALIAS_NOMBRE_PROYECTO = {
-    frozenset({'san', 'luis', 'saltillo'}): mapa_proyectos['TSLPS'],   # "SAN LUIS - SALTILLO"
-}
+_ALIAS_NOMBRE_PROYECTO = {frozenset(_norm(alt).split()): p["nombre"]          # «SAN LUIS - SALTILLO»
+                          for p in PROYECTOS.values() for alt in p.get("nombres_alternos", [])}
 _PROY_POR_NOMBRE.update(_ALIAS_NOMBRE_PROYECTO)
 _VOCAB_PROY = sorted({w for k in _PROY_POR_NOMBRE for w in k})
 
@@ -200,16 +182,13 @@ def _proyecto_por_nombre(texto):
     if exacto:
         return exacto
     return _PROY_POR_NOMBRE.get(frozenset(_mas_parecida(w, _VOCAB_PROY) for w in palabras))
-_ALIAS_CLAVE = {
-    'tqm': 'tmq',   
-}
+_ALIAS_CLAVE = {_norm(alt): _norm(clave)                                     # «TQM» → TMQ
+                for clave, p in PROYECTOS.items() for alt in p.get("claves_alternas", [])}
 _CLAVES_RE = re.compile(
     r'\b(' + '|'.join(sorted(mapa_proyectos, key=len, reverse=True)) + r')\b',
     re.IGNORECASE
 )
-ABREV_TRAMO = {
-    "MEX-QRO": "TMQ",
-}
+ABREV_TRAMO = {ab.upper(): clave for clave, p in PROYECTOS.items() for ab in p.get("abreviaturas", [])}   # «MEX-QRO» → TMQ
 _ABREV_TRAMO_RE = re.compile(
     r'\b(' + '|'.join(re.escape(k).replace(r'\-', r'\s*-\s*')
                        for k in sorted(ABREV_TRAMO, key=len, reverse=True)) + r')\b',
@@ -927,7 +906,11 @@ def _trato_propietario(palabra):
         return "Sr."
     return "C."
 
-_COD_PRIVADA_RE = re.compile(r'\b(?:MQ|AP)-[A-Z]{2,4}-P?\d{1,4}(?:-\d+)?\b|\bQRO-URB-\d+\b')
+# Nomenclaturas de propiedad privada por proyecto («MQ» → MQ-TUL-047; «QRO-URB» → QRO-URB-001).
+_PREF_PRIV = [pre for p in PROYECTOS.values() for pre in p.get("privada", [])]
+_COD_PRIVADA_RE = re.compile("|".join(
+    rf'\b{re.escape(pre)}-\d+\b' if "-" in pre else rf'\b{re.escape(pre)}-[A-Z]{{2,4}}-P?\d{{1,4}}(?:-\d+)?\b'
+    for pre in _PREF_PRIV))
 
 # Tipo de propiedad: código MQ/AP/QRO-URB = PRIVADA; ejido = SOCIAL; dudoso (?) = vacío (hay que llenar a mano).
 def detectar_tipo_propiedad(bloque, linea, nucleo_txt):

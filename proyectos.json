@@ -1,0 +1,11 @@
+{
+  "TAP":   {"nombre": "1. AIFA - PACHUCA",             "privada": ["AP"]},
+  "TIG":   {"nombre": "5. IRAPUATO - GUADALAJARA",     "sheet_jefe": true, "director": "ARQ. MIGUEL ÁNGEL SÁNCHEZ CORTES"},
+  "TMLM":  {"nombre": "6. MAZATLÁN - LOS MOCHIS"},
+  "TMQ":   {"nombre": "2. MÉXICO - QUERÉTARO",         "privada": ["MQ", "QRO-URB"], "claves_alternas": ["TQM"], "abreviaturas": ["MEX-QRO"]},
+  "TQI":   {"nombre": "3. QUERÉTARO - IRAPUATO",       "sheet_jefe": true, "director": "ING. MARTÍN FLORES BAILÓN"},
+  "TQSLP": {"nombre": "7. QUERÉTARO - SAN LUIS POTOSÍ"},
+  "TSNL":  {"nombre": "4. SALTILLO - NUEVO LAREDO",    "sheet_jefe": true, "director": "ING. LUIS HUMBERTO QUIROZ ESCAMILLA"},
+  "TSLPS": {"nombre": "8. SAN LUIS POTOSÍ - SALTILLO", "nombres_alternos": ["SAN LUIS - SALTILLO"]},
+  "TIX":   {"nombre": "9. TROLEBÚS IXTAPALUCA"}
+}
