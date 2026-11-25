@@ -359,7 +359,13 @@ def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta, timeout=8)
             timeout=timeout,
         )
         resp.raise_for_status()
-        return resp.json()["content"][0]["text"].strip()
+        cuerpo = resp.json()
+        texto = "".join(b.get("text", "") for b in cuerpo.get("content", []) if b.get("type") == "text").strip()
+        if not texto:                                     # sin bloque de texto: deja en el log qué llegó
+            tipos = [b.get("type") for b in cuerpo.get("content", [])]
+            print(f"[haiku {etiqueta}] sin texto · bloques={tipos} · stop_reason={cuerpo.get('stop_reason')}", flush=True)
+            return None
+        return texto
     except requests.HTTPError as e:
         print(f"[haiku {etiqueta}] HTTP {e.response.status_code}: {e.response.text[:300]}", flush=True)
     except Exception as e:
