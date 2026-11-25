@@ -365,12 +365,17 @@ def _llamar_haiku(system, mensaje, max_tokens, temperature, etiqueta, timeout=8)
         if not texto:                                     # sin bloque de texto: deja en el log qué llegó
             tipos = [b.get("type") for b in cuerpo.get("content", [])]
             print(f"[haiku {etiqueta}] sin texto · bloques={tipos} · stop_reason={cuerpo.get('stop_reason')}", flush=True)
+            avisar_admin("haiku", f"Haiku respondió sin texto (stop_reason={cuerpo.get('stop_reason')}). Los resúmenes salen con el texto base.")
             return None
         return texto
     except requests.HTTPError as e:
         print(f"[haiku {etiqueta}] HTTP {e.response.status_code}: {e.response.text[:300]}", flush=True)
+        credito = "credit" in e.response.text.lower()
+        avisar_admin("haiku", ("Haiku se quedó sin crédito: recarga en console.anthropic.com." if credito
+                               else f"Haiku falló (HTTP {e.response.status_code}).") + " Los resúmenes salen con el texto base.")
     except Exception as e:
         print(f"[haiku {etiqueta}] {type(e).__name__}: {e}", flush=True)
+        avisar_admin("haiku", f"Haiku no respondió ({type(e).__name__}). Los resúmenes salen con el texto base.")
     return None
 
 _RES_LOCAL = threading.local()       # por hilo: resúmenes pendientes (ensayo) y ya redactados
@@ -1777,6 +1782,7 @@ def _subir_a_sheets(filas):
             _subir_a_sheet_jefe(client, filas_jefe)
         except Exception as e:
             print(f"[sheet jefe] No se pudo replicar: {e}")
+            avisar_admin("jefe", f"No se replicaron {len(filas_jefe)} actividades al Sheet: {e}")
 
     return len(filas)
 
@@ -1887,6 +1893,19 @@ def telegram_enviar(chat_id, texto):
         )
     except requests.RequestException:
         pass
+
+_ultimo_aviso = {}   # tipo de alerta -> hora del último aviso
+
+
+# Avisa al administrador por Telegram que algo falló (máximo un aviso por tipo cada 30 min).
+def avisar_admin(tipo, texto):
+    chat = os.environ.get("TELEGRAM_ADMIN_CHAT", "").strip()
+    ahora = time.time()
+    if not chat or ahora - _ultimo_aviso.get(tipo, 0) < 1800:
+        return
+    _ultimo_aviso[tipo] = ahora
+    threading.Thread(target=telegram_enviar, args=(chat, f"⚠️ TRAXA: {texto}"), daemon=True).start()   # no frena la agenda
+
 
 # Webhook de Telegram: valida, evita duplicados y junta mensajes partidos.
 @app.route("/telegram/webhook", methods=["POST"])
