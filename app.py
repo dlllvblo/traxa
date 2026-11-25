@@ -1362,6 +1362,10 @@ def procesar_agenda(texto):
         bdts_val = bdts.group(1).strip().rstrip('.').strip() if bdts else ""
         if bdts_val.upper() == "N/A":
             bdts_val = ""
+        if not bdts_val and asistentes and re.search(r'\bBDT', bloque, re.IGNORECASE):
+            m_bdt = re.search(r'\(\s*(agro\s*fore?s?tal(?:es)?|agr[ií]colas?|construcci[oó]n(?:es)?)\s*\)', asistentes.group(1), re.IGNORECASE)
+            if m_bdt:
+                bdts_val = "Agroforestales" if m_bdt.group(1).lower().startswith("agr") else "Construcción"                                                                                                                                                 
 
         partes = []
         if nota_punto_encuentro:
