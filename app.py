@@ -1671,6 +1671,10 @@ def procesar_agendas(texto):
     for linea in texto.split('\n'):
         es_sep = re.match(r'^[ \t]*-{5,}[ \t]*$', linea)
         es_enc = re.match(r'^[ \t]*\W*(?:PROYECTO\s*:|Agenda\b)', linea, re.IGNORECASE)
+        # «Proyecto: MEX-QRO, F4-F5» dentro de una actividad es un campo, no el inicio de otra agenda
+        if es_enc and not linea.lstrip().startswith('*'):
+            previa = actual[-1] if actual else ""
+            es_enc = es_enc if (not previa.strip() and not linea[:1].isspace()) else None
         ya_hay_act = any(re.match(r'^\s*\d+[\.\-]', l) for l in actual)
         if es_sep or (es_enc and ya_hay_act):
             partes.append('\n'.join(actual))
