@@ -316,6 +316,19 @@ def _municipios(celda):
     return salida
 
 
+# Estados de una fila: el de ESTADO y el que cierra cada grupo de MUNICIPIO.
+# «Polotitlán, Estado de México; San Juan del Río, Querétaro» -> {"mexico": ..., "queretaro": ...}
+def estados_fila(f):
+    salida = {}
+    if (f.get("ESTADO") or "").strip():
+        salida[_edo(f["ESTADO"])] = f["ESTADO"].strip()
+    for grupo in str(f.get("MUNICIPIO") or "").split(";"):
+        partes = [x.strip(" .") for x in re.split(r",|\s+y\s+", grupo) if x.strip(" .")]
+        if len(partes) >= 2 and _n(partes[-1]) in ESTADOS:
+            salida.setdefault(_edo(partes[-1]), partes[-1])
+    return salida                           # {comparable: como viene escrito}
+
+
 # Estado y municipio mencionados, tomados de los que existen en el Sheet.
 # Devuelve (estado, municipio) comparables y sus nombres tal como se muestran.
 def _lugar(n, filas):
@@ -399,16 +412,16 @@ def interpretar(texto, filas, hoy):
 
 # Filas del Sheet que cumplen el periodo y los filtros.
 def filtrar(q, filas):
-    inv = {v: k for k, v in N.mapa_proyectos.items()}
+    inv = {N._norm(v): k for k, v in N.mapa_proyectos.items()}   # mismo cotejo que el dashboard
     salida = []
     for f in filas:
         d = _fecha(f)
         if d is None or d < q["desde"] or d > q["hasta"]:
             continue
-        clave = inv.get((f.get("PROYECTO FERROVIARIO") or "").strip(), "OTRO")
+        clave = inv.get(N._norm(f.get("PROYECTO FERROVIARIO")), "OTRO")
         if q["proyectos"] and clave not in q["proyectos"]:
             continue
-        if q["estado"] and _edo(f.get("ESTADO")) != q["estado"]:
+        if q["estado"] and q["estado"] not in estados_fila(f):
             continue
         if q["municipio"] and q["municipio"] not in {c for c, _ in _municipios(f.get("MUNICIPIO"))}:
             continue

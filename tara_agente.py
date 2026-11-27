@@ -35,7 +35,8 @@ def _n(s):
 # =========================
 def _filas(crudas=None):
     """Filas del Sheet con fecha, clave de proyecto y campos calculados (acciones, categorías, dependencias)."""
-    inv = {v: k for k, v in N.mapa_proyectos.items()}
+    import tara_consultas                        # aquí y no arriba: tara_consultas.py importa este archivo
+    inv = {N._norm(v): k for k, v in N.mapa_proyectos.items()}   # mismo cotejo que el dashboard
     salida = []
     for i, f in enumerate(crudas if crudas is not None else N._filas_hoja_principal()):
         d = _fecha(f)
@@ -50,9 +51,10 @@ def _filas(crudas=None):
         salida.append({
             "id": i + 2,                                   # fila en el Sheet (con encabezado en la 1)
             "fecha": d, "hora": _hora(f) or "",
-            "proyecto": inv.get((f.get("PROYECTO FERROVIARIO") or "").strip(), "OTRO"),
+            "proyecto": inv.get(N._norm(f.get("PROYECTO FERROVIARIO")), "OTRO"),
             "actividad": tipo, "detalle": detalle,
             "estado": (f.get("ESTADO") or "").strip(), "municipio": (f.get("MUNICIPIO") or "").strip(),
+            "estados": list(tara_consultas.estados_fila(f)),     # todos los que toca, comparables
             "nucleo": (f.get("NÚCLEO AGRARIO") or f.get("EJIDO") or "").strip(),
             "frente": (f.get("FRENTE") or "").strip(), "tipo_propiedad": (f.get("TIPO DE PROPIEDAD") or "").strip(),
             "solicitante": (f.get("SOLICITANTE") or "").strip(),
@@ -82,6 +84,8 @@ def _a_fecha(s):
 def _filtrar(filas, f):
     """Aplica los filtros comunes de todas las herramientas."""
     f = f or {}
+    import tara_consultas                        # aquí y no arriba: tara_consultas.py importa este archivo
+    edo = tara_consultas._edo(f["estado"]) if f.get("estado") else ""   # «Estado de México» = «México»
     desde, hasta = _a_fecha(f.get("desde")), _a_fecha(f.get("hasta"))
     proys = {p.upper() for p in f.get("proyectos") or []}
     acciones = {_n(a) for a in f.get("acciones") or []}
@@ -100,7 +104,7 @@ def _filtrar(filas, f):
             continue
         if deps and not deps <= {d.upper() for d in r["dependencias"]}:
             continue
-        if f.get("estado") and _n(f["estado"]) not in _n(r["estado"]):
+        if edo and edo not in r["estados"]:
             continue
         if f.get("municipio") and _n(f["municipio"]) not in _n(r["municipio"]):
             continue
@@ -138,6 +142,8 @@ def _claves(r, campo):
         return r["dependencias"] or ["(sin dependencia)"]
     if campo == "nomenclatura":
         return r["nomenclaturas"]
+    if campo == "estado":
+        return [k.upper() for k in r["estados"]] or ["(vacío)"]
     v = r.get(campo, "")
     return [N._sin_acentos(v).upper().strip() if campo in ("estado", "municipio", "nucleo") else v or "(vacío)"]
 

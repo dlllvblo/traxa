@@ -2159,6 +2159,9 @@ def api_agenda():
         else:
             fecha_tope = fecha_piso = None
 
+        # Nombre de cada estado tal como viene en la columna ESTADO (MÉXICO, QUERÉTARO…).
+        etiqueta = {tara_consultas._edo(f["ESTADO"]): f["ESTADO"].strip() for f in filas if (f.get("ESTADO") or "").strip()}
+
         for f in filas:
             d = fecha_dt(f.get("FECHA Y HORA", ""))
             if fecha_piso is not None and (d is None or d < fecha_piso or d > fecha_tope):
@@ -2166,7 +2169,8 @@ def api_agenda():
 
             proy = inv.get(_norm(f.get("PROYECTO FERROVIARIO", "")), "OTRO")
             carga[proy] += 1
-            if f.get("ESTADO"):    edo[f["ESTADO"]] += 1
+            for c, txt in tara_consultas.estados_fila(f).items():   # una por cada estado que toca
+                edo[etiqueta.get(c, txt.upper())] += 1
 
             celda = _sin_acentos(str(f.get("DEPENDENCIAS PARTICIPANTES", "")).upper())
             for canon, patrones in _DEP_PATRONES.items():

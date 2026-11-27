@@ -139,7 +139,7 @@ def _capas_de(f):
 
 # Lee el Sheet y arma el mapa para el rango (y proyecto) pedidos.
 def datos(desde, hasta, proyecto=""):
-    inv = {v: k for k, v in N.mapa_proyectos.items()}
+    inv = {N._norm(v): k for k, v in N.mapa_proyectos.items()}   # mismo cotejo que el dashboard
     por_mun = defaultdict(lambda: {"n": 0, "proy": Counter(), "acts": [], "capas": Counter(), "multi": 0})
     por_proy, no_ubicados, por_capa = Counter(), Counter(), Counter()
     total = ubicadas = 0
@@ -148,7 +148,7 @@ def datos(desde, hasta, proyecto=""):
         d = _fecha(f)
         if d is None or d < desde or d > hasta:
             continue
-        clave = inv.get((f.get("PROYECTO FERROVIARIO") or "").strip(), "OTRO")
+        clave = inv.get(N._norm(f.get("PROYECTO FERROVIARIO")), "OTRO")
         por_proy[clave] += 1                       # para el selector: cuenta antes de filtrar por proyecto
         if proyecto and clave != proyecto:
             continue

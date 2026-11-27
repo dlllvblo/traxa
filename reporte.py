@@ -85,12 +85,17 @@ def _lista(contador, tope=None):
 
 # Lee el Sheet y arma todos los números del reporte para el rango dado.
 def datos(desde, hasta):
-    inv = {v: k for k, v in N.mapa_proyectos.items()}
+    inv = {N._norm(v): k for k, v in N.mapa_proyectos.items()}   # mismo cotejo que el dashboard
     import mapa                                    # aquí y no arriba: mapa.py importa de reporte.py
+    import tara_consultas                          # igual: tara_consultas.py importa de reporte.py
     proy, edo, dep, cat, prop, mun, por_dia, emp = (Counter() for _ in range(8))
     actividades, sin_fecha, sin_categoria = [], 0, 0
 
-    for f in N._filas_hoja_principal():
+    filas = N._filas_hoja_principal()
+    # Nombre de cada estado tal como viene en la columna ESTADO, en tipo título.
+    etiqueta = {tara_consultas._edo(f["ESTADO"]): _titulo(f["ESTADO"]) for f in filas if (f.get("ESTADO") or "").strip()}
+
+    for f in filas:
         if not any((v or "").strip() for v in f.values()):
             continue                                    # renglón vacío
         d = _fecha(f)
@@ -100,12 +105,12 @@ def datos(desde, hasta):
         if d < desde or d > hasta:
             continue
 
-        clave = inv.get((f.get("PROYECTO FERROVIARIO") or "").strip(), "OTRO")
+        clave = inv.get(N._norm(f.get("PROYECTO FERROVIARIO")), "OTRO")
         proy[clave] += 1
 
         estado = _titulo(f.get("ESTADO"))
-        if estado:
-            edo[estado] += 1
+        for c, txt in tara_consultas.estados_fila(f).items():   # una por cada estado que toca
+            edo[etiqueta.get(c, _titulo(txt))] += 1
         municipio = _titulo(f.get("MUNICIPIO"))
         idxs = mapa.ubicar(f.get("ESTADO"), f.get("MUNICIPIO"))
         for i in idxs:                             # la actividad suma en cada municipio donde se hizo
