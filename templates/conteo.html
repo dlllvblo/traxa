@@ -69,7 +69,18 @@
   .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:var(--radius);
     padding:20px 22px;box-shadow:var(--shadow);position:relative;overflow:hidden}
   .span12{grid-column:span 12}
-  .periodo{grid-column:span 12;text-align:center;font-family:'Patria','Noto Sans',sans-serif;font-size:1.5rem;font-weight:700;color:var(--text-strong);letter-spacing:.02em;margin:2px 0}
+  /* Periodo consultado: etiqueta dorada con filetes y fechas en Patria */
+  .periodo{grid-column:span 12;display:flex;flex-direction:column;align-items:center;gap:3px;margin:4px 0 2px}
+  .periodo:has(.txt:empty){display:none}
+  .periodo .eti{display:flex;align-items:center;gap:12px;font-size:.58rem;font-weight:700;letter-spacing:.34em;text-transform:uppercase;color:var(--dorado)}
+  .periodo .eti::before,.periodo .eti::after{content:"";width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--dorado))}
+  .periodo .eti::after{transform:scaleX(-1)}
+  .periodo .txt{font-family:'Patria','Noto Sans',sans-serif;font-size:1.65rem;font-weight:700;color:var(--text-strong);letter-spacing:.01em;text-align:center}
+  .periodo .txt b{color:var(--dorado);font-variant-numeric:tabular-nums}
+  .periodo .txt i{font-style:normal;font-weight:400;font-size:.7em;color:var(--muted,#5A4636);margin:0 .2em}
+  .periodo.nuevo .txt{animation:aparece .45s ease}
+  @keyframes aparece{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @media (max-width:560px){.periodo .txt{font-size:1.25rem}.periodo .eti::before,.periodo .eti::after{width:36px}}
 
   /* Contenedor de tarjetas dinámicas */
   .cards{grid-column:span 12;display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
@@ -181,7 +192,7 @@
 
   <div class="grid">
 
-    <div class="periodo" id="periodo"></div>
+    <div class="periodo" id="periodo"><span class="eti">Periodo</span><span class="txt" id="periodo-t"></span></div>
 
     <div class="panel span12">
       <div class="totalbar">
@@ -234,14 +245,21 @@ function countUp(el,target,dur=900){
     if(t<1)requestAnimationFrame(tick);else el.dataset.cur=target;})(start);
 }
 
-// «Noviembre 01 al 27» o «Junio 01 a Septiembre 13», a partir de dd/mm/aaaa.
+// «Noviembre 01 al 27» o «Junio 01 a Septiembre 13», a partir de dd/mm/aaaa (días en <b>, conectores en <i>).
 function periodoTexto(desde,hasta){
   const M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const [d1,m1,a1]=desde.split('/').map(Number),[d2,m2,a2]=hasta.split('/').map(Number);
-  const dd=n=>String(n).padStart(2,'0');
-  if(a1!==a2)return M[m1-1]+' '+dd(d1)+' de '+a1+' a '+M[m2-1]+' '+dd(d2)+' de '+a2;   // cruza de año
-  if(m1!==m2)return M[m1-1]+' '+dd(d1)+' a '+M[m2-1]+' '+dd(d2);
-  return d1===d2?M[m1-1]+' '+dd(d1):M[m1-1]+' '+dd(d1)+' al '+dd(d2);
+  const dd=n=>'<b>'+String(n).padStart(2,'0')+'</b>', y=t=>' <i>'+t+'</i> ';
+  if(a1!==a2)return M[m1-1]+' '+dd(d1)+y('de')+a1+y('a')+M[m2-1]+' '+dd(d2)+y('de')+a2;   // cruza de año
+  if(m1!==m2)return M[m1-1]+' '+dd(d1)+y('a')+M[m2-1]+' '+dd(d2);
+  return d1===d2?M[m1-1]+' '+dd(d1):M[m1-1]+' '+dd(d1)+y('al')+dd(d2);
+}
+
+// Pone el periodo y repite la animación de entrada.
+function pintaPeriodo(html){
+  const p=document.getElementById('periodo');
+  document.getElementById('periodo-t').innerHTML=html;
+  p.classList.remove('nuevo');void p.offsetWidth;p.classList.add('nuevo');
 }
 
 // Abre el Geovisualizador en la capa indicada, con las fechas del filtro si las hay.
@@ -320,7 +338,7 @@ async function cargar(){
     if(j.ventana){
       document.getElementById('ventana').innerHTML=
         "Ventana: <b>"+j.ventana.desde+"</b> &rarr; <b>"+j.ventana.hasta+"</b>";
-      document.getElementById('periodo').textContent=periodoTexto(j.ventana.desde,j.ventana.hasta);
+      pintaPeriodo(periodoTexto(j.ventana.desde,j.ventana.hasta));
     }
 
     const conteo=j.conteo||{};
