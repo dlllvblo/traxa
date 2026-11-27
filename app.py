@@ -2106,7 +2106,7 @@ def api_agenda():
         if not filas:
             return jsonify({"carga": {}, "edo": {}, "dep": {}, "serie": {}, "agenda": []})
 
-        inv = {v: k for k, v in mapa_proyectos.items()}
+        inv = {_norm(v): k for k, v in mapa_proyectos.items()}   # sin número, acentos, guiones ni espacios de más
         carga, edo, dep, serie = Counter(), Counter(), Counter(), defaultdict(int)
         emp = Counter()
 
@@ -2164,7 +2164,7 @@ def api_agenda():
             if fecha_piso is not None and (d is None or d < fecha_piso or d > fecha_tope):
                 continue
 
-            proy = inv.get(f.get("PROYECTO FERROVIARIO", ""), "OTRO")
+            proy = inv.get(_norm(f.get("PROYECTO FERROVIARIO", "")), "OTRO")
             carga[proy] += 1
             if f.get("ESTADO"):    edo[f["ESTADO"]] += 1
 
@@ -2201,7 +2201,7 @@ def api_agenda():
                 clave = (d, hora if hora else "00:00")
                 items.append((clave, {
                     "hora":  hora if hora else "--:--",
-                    "code":  inv.get(f.get("PROYECTO FERROVIARIO", ""), "—"),
+                    "code":  inv.get(_norm(f.get("PROYECTO FERROVIARIO", "")), "—"),
                     "mun":   f.get("MUNICIPIO", ""),
                     "act":   f.get("TIPO DE SOLICITUD", ""),
                 }))
