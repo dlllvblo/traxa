@@ -85,6 +85,7 @@
   .kpi .label{font-size:.72rem;color:var(--muted);margin-top:8px}
 
   .span7{grid-column:span 7}.span5{grid-column:span 5}.span8{grid-column:span 8}.span4{grid-column:span 4}.span12{grid-column:span 12}
+  .periodo{grid-column:span 12;text-align:center;font-family:'Patria','Noto Sans',sans-serif;font-size:1.5rem;font-weight:700;color:var(--text-strong);letter-spacing:.02em;margin:2px 0}
 
   /* Fila de proyecto: tramo arriba, barra a todo lo ancho abajo; número a la derecha */
   .load-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;column-gap:14px;row-gap:8px;align-items:center;padding:13px 0;border-top:1px solid var(--line-soft)}
@@ -194,6 +195,8 @@
 
   <div class="grid">
 
+    <div class="periodo" id="periodo"></div>
+
     <div class="panel kpi">
       <div class="top"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#A8803F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div></div>
       <div class="value mono" id="v-total">0</div>
@@ -275,6 +278,16 @@ function colorDe(code){ return (PROYECTOS.find(p=>p.code===code)||{}).c || COLOR
 
 let DATA={carga:{},edo:{},dep:{},dias:[],serie:[],agenda:[]};
 
+// «Noviembre 01 al 27» o «Junio 01 a Septiembre 13», a partir de dd/mm/aaaa.
+function periodoTexto(desde,hasta){
+  const M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const [d1,m1,a1]=desde.split('/').map(Number),[d2,m2,a2]=hasta.split('/').map(Number);
+  const dd=n=>String(n).padStart(2,'0');
+  if(a1!==a2)return M[m1-1]+' '+dd(d1)+' de '+a1+' a '+M[m2-1]+' '+dd(d2)+' de '+a2;   // cruza de año
+  if(m1!==m2)return M[m1-1]+' '+dd(d1)+' a '+M[m2-1]+' '+dd(d2);
+  return d1===d2?M[m1-1]+' '+dd(d1):M[m1-1]+' '+dd(d1)+' al '+dd(d2);
+}
+
 function parseF(s){ const [d,m,a]=String(s).split('/'); return new Date(+a,+m-1,+d); }
 function titleCase(s){
   return String(s||'').toLowerCase().replace(/(^|\s)(\S)/g, (m,sep,ch)=>sep+ch.toUpperCase());
@@ -304,6 +317,10 @@ async function generar(){
     if(diasOrd.length){
       v.innerHTML="Ventana: <b>"+diasOrd[0]+"</b> &rarr; <b>"+diasOrd[diasOrd.length-1]+"</b>";
     }else{ v.textContent="Sin datos en la ventana"; }
+    // Periodo en grande: el del filtro; sin filtro, del primer al último día con actividades
+    const iso=s=>s.split('-').reverse().join('/');
+    const pd=fd&&fh?iso(fd):diasOrd[0], ph=fd&&fh?iso(fh):diasOrd[diasOrd.length-1];
+    document.getElementById('periodo').textContent=pd&&ph?periodoTexto(pd,ph):'';
 
     if(DATA.carga.OTRO){
       banner.style.display='block';

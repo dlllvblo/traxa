@@ -69,6 +69,7 @@
   .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:var(--radius);
     padding:20px 22px;box-shadow:var(--shadow);position:relative;overflow:hidden}
   .span12{grid-column:span 12}
+  .periodo{grid-column:span 12;text-align:center;font-family:'Patria','Noto Sans',sans-serif;font-size:1.5rem;font-weight:700;color:var(--text-strong);letter-spacing:.02em;margin:2px 0}
 
   /* Contenedor de tarjetas dinámicas */
   .cards{grid-column:span 12;display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
@@ -180,6 +181,8 @@
 
   <div class="grid">
 
+    <div class="periodo" id="periodo"></div>
+
     <div class="panel span12">
       <div class="totalbar">
         <div class="item"><span class="t">Actividades en ventana</span><span class="n mono" id="t-total">0</span></div>
@@ -229,6 +232,16 @@ function countUp(el,target,dur=900){
   (function tick(now){const t=Math.min(1,(now-start)/dur),e=1-Math.pow(1-t,3);
     el.textContent=Math.round(from+(target-from)*e).toLocaleString('es-MX');
     if(t<1)requestAnimationFrame(tick);else el.dataset.cur=target;})(start);
+}
+
+// «Noviembre 01 al 27» o «Junio 01 a Septiembre 13», a partir de dd/mm/aaaa.
+function periodoTexto(desde,hasta){
+  const M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const [d1,m1,a1]=desde.split('/').map(Number),[d2,m2,a2]=hasta.split('/').map(Number);
+  const dd=n=>String(n).padStart(2,'0');
+  if(a1!==a2)return M[m1-1]+' '+dd(d1)+' de '+a1+' a '+M[m2-1]+' '+dd(d2)+' de '+a2;   // cruza de año
+  if(m1!==m2)return M[m1-1]+' '+dd(d1)+' a '+M[m2-1]+' '+dd(d2);
+  return d1===d2?M[m1-1]+' '+dd(d1):M[m1-1]+' '+dd(d1)+' al '+dd(d2);
 }
 
 // Abre el Geovisualizador en la capa indicada, con las fechas del filtro si las hay.
@@ -307,6 +320,7 @@ async function cargar(){
     if(j.ventana){
       document.getElementById('ventana').innerHTML=
         "Ventana: <b>"+j.ventana.desde+"</b> &rarr; <b>"+j.ventana.hasta+"</b>";
+      document.getElementById('periodo').textContent=periodoTexto(j.ventana.desde,j.ventana.hasta);
     }
 
     const conteo=j.conteo||{};
